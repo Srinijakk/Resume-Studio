@@ -126,6 +126,7 @@
     background:#fff; width:800px; max-width:100%; padding:var(--resume-pad-y) var(--resume-pad-x);
     box-shadow:0 2px 18px rgba(0,0,0,0.08);
     font-family:var(--resume-font); color:#1a1a1a; font-size:var(--resume-font-size); line-height:var(--resume-line-height);
+    font-variant-numeric: lining-nums; font-feature-settings: "lnum" 1;
   }
   #resume h1.name{ text-align:center; font-size:1.7em; margin:0 0 4px; }
   .contact-line{ text-align:center; font-size:0.85em; margin-bottom:14px; color:#333; }
@@ -770,11 +771,20 @@ function renderExperience(){
     </div>
   `).join('') + `<button class="add-entry-btn" onclick="addExperience()">+ Add Experience</button>`;
 }
+/* keeps the AI Assistant's "Which entry?" dropdown in sync the instant an entry is
+   added/removed in Form Builder — no need to switch tabs for it to catch up */
+function refreshEntryDropdownIfVisible(){
+  const targetSel = document.getElementById('target-select');
+  if(!targetSel) return;
+  const target = targetSel.value;
+  if(target==='experience' || target==='project') onTargetChange();
+}
+
 function addExperience(){
   state.experience.push({id:nid(), company:'', companyUrl:'', jobTitle:'', city:'', country:'', remote:false, startMonth:'', startYear:'', endMonth:'', endYear:'', current:false, roleDescription:'', bullets:[]});
-  renderExperience(); renderPreview();
+  renderExperience(); renderPreview(); refreshEntryDropdownIfVisible();
 }
-function removeExp(id){ state.experience=state.experience.filter(e=>e.id!==id); renderExperience(); renderPreview(); }
+function removeExp(id){ state.experience=state.experience.filter(e=>e.id!==id); renderExperience(); renderPreview(); refreshEntryDropdownIfVisible(); }
 
 /* ===== PROJECTS ===== */
 function renderProjects(){
@@ -798,9 +808,9 @@ function renderProjects(){
 }
 function addProject(){
   state.projects.push({id:nid(), name:'', link:'', startMonth:'', startYear:'', endMonth:'', endYear:'', bullets:[]});
-  renderProjects(); renderPreview();
+  renderProjects(); renderPreview(); refreshEntryDropdownIfVisible();
 }
-function removeProj(id){ state.projects=state.projects.filter(p=>p.id!==id); renderProjects(); renderPreview(); }
+function removeProj(id){ state.projects=state.projects.filter(p=>p.id!==id); renderProjects(); renderPreview(); refreshEntryDropdownIfVisible(); }
 
 /* shared field/bullet mutators for experience & projects */
 function updateExpOrProjField(id, field, val, coll){
