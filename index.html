@@ -391,6 +391,15 @@ function toggleSec(headEl){
   chev.classList.toggle('open');
 }
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* PDF viewers treat hrefs without a protocol as relative links, which silently do
+   nothing when clicked in a static PDF. This guarantees every link is absolute. */
+function normalizeUrl(u){
+  if(!u) return '';
+  const trimmed = u.trim();
+  if(!trimmed) return '';
+  if(/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) return trimmed;
+  return 'https://' + trimmed;
+}
 
 /* ===== AI PARSER ===== */
 function isBulletLine(l){ return /^\s*[•\-\*]\s+/.test(l); }
@@ -920,7 +929,7 @@ function renderPreview(){
   const contactParts=[
     state.phone ? `<span style="color:var(--resume-accent)">${esc(state.phone)}</span>` : '',
     state.email ? `<span style="color:var(--resume-accent)">${esc(state.email)}</span>` : '',
-    ...state.links.filter(l=>l.url||l.label).map(l=>`<a href="${esc(l.url)||'#'}">${esc(l.label||l.platform)}</a>`)
+    ...state.links.filter(l=>l.url||l.label).map(l=>`<a href="${esc(normalizeUrl(l.url))||'#'}">${esc(l.label||l.platform)}</a>`)
   ];
   document.getElementById('r-contact').innerHTML = contactParts.filter(Boolean).join(' ◇ ');
 
@@ -945,20 +954,20 @@ function renderPreview(){
   document.getElementById('r-projects').innerHTML = state.projects.length ? state.projects.map(p=>{
     const dates = (p.startYear ? dateStr(p.startMonth,p.startYear)+' — '+dateStr(p.endMonth,p.endYear) : p.dateRaw) || '';
     return `<div class="proj-entry">
-    <div class="r-row"><span class="r-title">${esc(p.name)} ${p.link?`<a href="${esc(p.link)}" style="font-size:0.85em;font-weight:400;">Link</a>`:''}</span><span>${esc(dates)}</span></div>
+    <div class="r-row"><span class="r-title">${esc(p.name)} ${p.link?`<a href="${esc(normalizeUrl(p.link))}" style="font-size:0.85em;font-weight:400;">Link</a>`:''}</span><span>${esc(dates)}</span></div>
     ${p.bullets.filter(b=>b.text).length ? `<ul class="r-bullets">${p.bullets.filter(b=>b.text).map(b=>`<li>${esc(b.text)}</li>`).join('')}</ul>` : ''}
     </div>`;
   }).join('') : '<span class="empty-note">—</span>';
 
   document.getElementById('r-certs').innerHTML = state.certifications.filter(c=>!c.hidden && (c.name||c.authority)).length ? state.certifications.filter(c=>!c.hidden && (c.name||c.authority)).map(c=>{
     const dates = dateStr(c.month, c.year);
-    const nameDisplay = c.url ? `<a href="${esc(c.url)}" style="color:var(--resume-accent);text-decoration:none;">${esc(c.name)}</a>` : esc(c.name);
+    const nameDisplay = c.url ? `<a href="${esc(normalizeUrl(c.url))}" style="color:var(--resume-accent);text-decoration:none;">${esc(c.name)}</a>` : esc(c.name);
     return `<div class="r-row"><span>${nameDisplay}${c.authority?' by '+esc(c.authority):''}</span>${dates?`<span>${esc(dates)}</span>`:''}</div>`;
   }).join('') : '<span class="empty-note">—</span>';
 
   document.getElementById('r-pubs').innerHTML = state.publications.filter(p=>!p.hidden && (p.awardName||p.description)).length ? state.publications.filter(p=>!p.hidden && (p.awardName||p.description)).map(p=>{
     const dates = dateStr(p.month, p.year);
-    const issuerDisplay = p.issuer ? (p.url ? `<a href="${esc(p.url)}" style="color:var(--resume-accent);text-decoration:none;">${esc(p.issuer)}</a>` : esc(p.issuer)) : '';
+    const issuerDisplay = p.issuer ? (p.url ? `<a href="${esc(normalizeUrl(p.url))}" style="color:var(--resume-accent);text-decoration:none;">${esc(p.issuer)}</a>` : esc(p.issuer)) : '';
     return `<div class="r-row"><span class="r-title">${esc(p.awardName)}${issuerDisplay?' — '+issuerDisplay:''}</span>${dates?`<span>${esc(dates)}</span>`:''}</div>
     ${p.description?`<div style="font-size:1em;white-space:pre-wrap;margin-bottom:6px;">${esc(p.description)}</div>`:''}`;
   }).join('') : '<span class="empty-note">—</span>';
