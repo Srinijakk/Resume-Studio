@@ -110,13 +110,18 @@
   .preview-wrap{ padding:36px; overflow-y:auto; max-height:100vh; display:flex; justify-content:center; }
 
   @media print{
-    body *{ visibility:hidden; }
-    #resume, #resume *{ visibility:visible; }
+    /* hide the editor chrome outright instead of the visibility-hack, and keep
+       #resume in normal document flow rather than absolutely positioned —
+       some browsers' print-to-PDF engines drop real clickable link annotations
+       on content that's hidden-then-repositioned this way. */
+    .panel, .resize-handle{ display:none !important; }
+    .app{ display:block !important; }
+    .preview-wrap{ padding:0 !important; display:block !important; max-height:none !important; overflow:visible !important; }
     #resume{
-      position:absolute; top:0; left:0; box-shadow:none !important;
-      width:100% !important; min-height:0 !important; margin:0;
+      box-shadow:none !important; width:100% !important; max-width:100% !important;
+      min-height:0 !important; margin:0 auto !important;
+      -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
     }
-    .preview-wrap{ padding:0; }
     @page{ margin:0; size:auto; }
   }
   #resume{
