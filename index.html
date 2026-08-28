@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Resume Studio</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e2e2e2; --panel:#ffffff;
@@ -106,6 +105,17 @@
 
   /* preview */
   .preview-wrap{ padding:36px; overflow-y:auto; max-height:100vh; display:flex; justify-content:center; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #resume, #resume *{ visibility:visible; }
+    #resume{
+      position:absolute; top:0; left:0; box-shadow:none !important;
+      width:100% !important; min-height:0 !important; margin:0;
+    }
+    .preview-wrap{ padding:0; }
+    @page{ margin:0; size:auto; }
+  }
   #resume{
     --resume-font:'Georgia','Times New Roman',serif;
     --resume-font-size:10.1pt;
@@ -128,8 +138,7 @@
   .r-sub{ font-style:italic; font-size:1em; margin:1px 0 2px; display:flex; justify-content:space-between; }
   .r-bullets{ margin:2px 0 4px 18px; padding:0; }
   .r-bullets li{ margin-bottom:1px; font-size:1em; }
-  .r-skill-row{ font-size:1em; margin-bottom:3px; }
-  .r-skill-row b{ display:inline-block; width:200px; vertical-align:top; }
+  .r-skill-row{ font-size:1em; margin-bottom:4px; }
   .empty-note{ color:#999; font-style:italic; font-size:11.5px; }
 </style>
 </head>
@@ -299,6 +308,7 @@
 
   <div class="action-bar">
     <button type="button" class="download-btn" onclick="return downloadPDF(event)">Download as PDF</button>
+    <div class="hint" style="margin-top:8px;">Opens your browser's print dialog — choose "Save as PDF" as the destination. This gives crisp, real text (not a screenshot), matching print-shop quality.</div>
   </div>
 </div>
 
@@ -824,7 +834,7 @@ function renderPreview(){
   const edu=state.education;
   document.getElementById('r-education').innerHTML = (edu.school||edu.degree) ? `<div class="r-row"><span>${esc(edu.school)}${edu.degree?': '+esc(edu.degree):''}${edu.gpa?' (GPA: '+esc(edu.gpa)+')':''}</span><span>${esc(edu.dates)}</span></div>` : '<span class="empty-note">—</span>';
 
-  document.getElementById('r-skills').innerHTML = state.skills.length ? state.skills.filter(c=>c.skills.length).map(c=>`<div class="r-skill-row"><b>${esc(c.category)}</b>${c.skills.map(s=>esc(s.name)).join(', ')}</div>`).join('') : '<span class="empty-note">—</span>';
+  document.getElementById('r-skills').innerHTML = state.skills.length ? state.skills.filter(c=>c.skills.length).map(c=>`<div class="r-skill-row"><b>${esc(c.category)}:</b> ${c.skills.map(s=>esc(s.name)).join(', ')}</div>`).join('') : '<span class="empty-note">—</span>';
 
   document.getElementById('r-experience').innerHTML = state.experience.length ? state.experience.map(e=>{
     const dates = (e.startYear ? (e.current ? dateStr(e.startMonth,e.startYear)+' — Present' : dateStr(e.startMonth,e.startYear)+' — '+dateStr(e.endMonth,e.endYear)) : e.dateRaw) || '';
@@ -873,34 +883,15 @@ function restoreState(){
 /* ===== PDF DOWNLOAD (no page navigation/reload) ===== */
 function downloadPDF(event){
   if(event){ event.preventDefault(); }
-  const resumeEl = document.getElementById('resume');
-  const originalMinHeight = resumeEl.style.minHeight;
-  try{
-    const format = updateDownloadFormat();
-    if(typeof html2pdf === 'undefined'){
-      alert('PDF library failed to load (check your internet connection) — try again in a moment.');
-      return false;
-    }
-    let filename = (document.getElementById('st-filename').value || 'resume.pdf').trim();
-    if(!filename.toLowerCase().endsWith('.pdf')) filename += '.pdf';
-    const opt={ margin:0, filename:filename, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'in',format:format,orientation:'portrait'} };
-
-    // the min-height set by applyStyles() is purely for the on-screen paper look —
-    // exporting with it still applied pads the canvas past the real content height,
-    // which can spill a blank second page. Drop it just for the capture, then restore.
-    resumeEl.style.minHeight = 'auto';
-    html2pdf().set(opt).from(resumeEl).save()
-      .then(()=>{ resumeEl.style.minHeight = originalMinHeight; })
-      .catch(err=>{
-        resumeEl.style.minHeight = originalMinHeight;
-        console.error('downloadPDF failed', err);
-        alert('Could not generate the PDF: ' + err.message);
-      });
-  } catch(err){
-    resumeEl.style.minHeight = originalMinHeight;
-    console.error('downloadPDF failed', err);
-    alert('Could not generate the PDF: ' + err.message);
-  }
+  // uses the browser's native print engine instead of a rasterized screenshot —
+  // this produces real vector text (crisp, selectable, matches Word/Docs export quality)
+  // instead of a compressed JPEG image of the page.
+  let filenameField = (document.getElementById('st-filename').value || 'resume').trim();
+  filenameField = filenameField.replace(/\.pdf$/i, '');
+  const originalTitle = document.title;
+  document.title = filenameField; // most browsers use the page title as the default save-as filename
+  window.print();
+  setTimeout(()=>{ document.title = originalTitle; }, 500);
   return false;
 }
 
