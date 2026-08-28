@@ -296,10 +296,16 @@
       </div>
 
       <div class="sec">
-        <div class="sec-head" onclick="toggleSec(this)"><h2>Certifications &amp; Publications</h2><span class="chev">▾</span></div>
-        <div class="sec-body">
-          <label>Certifications (one per line)</label><textarea id="certsText" oninput="onCertsPubsEdit()"></textarea>
-          <label>Publications</label><textarea id="pubsText" oninput="onCertsPubsEdit()"></textarea>
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Certifications</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="certsBody">
+          <button class="add-btn" onclick="addCert()">+ Add</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Publications</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="pubsBody">
+          <button class="add-btn" onclick="addPub()">+ Add</button>
         </div>
       </div>
 
@@ -357,7 +363,7 @@ let state = {
   skills:[],
   experience:[],
   projects:[],
-  certs:"", pubs:""
+  certifications:[], publications:[]
 };
 
 /* ===== TOP TABS ===== */
@@ -545,8 +551,18 @@ function parseAndFill(){
     };
   });
 
-  state.certs = (sections['CERTIFICATIONS']||[]).map(l=>l.trim()).filter(Boolean).join('\n');
-  state.pubs = (sections['PUBLICATIONS']||[]).map(l=>l.trim()).filter(Boolean).join('\n');
+  const certLines = (sections['CERTIFICATIONS']||[]).map(l=>l.trim()).filter(Boolean);
+  if(certLines.length){
+    state.certifications = certLines.map(line=>{
+      const parts = line.split(/ by | – | - /i);
+      return { id:nid(), name: parts[0]||line, authority: parts[1]||'', url:'', month:'', year:'', hidden:false };
+    });
+  }
+
+  const pubLines = (sections['PUBLICATIONS']||[]).map(l=>l.trim()).filter(Boolean);
+  if(pubLines.length){
+    state.publications = [{ id:nid(), awardName: pubLines[0]||'', issuer: pubLines[1]||'', url:'', month:'', year:'', description: pubLines.slice(2).join(' '), hidden:false }];
+  }
 
   showStatus('Parsed: '+found.join(', ')+'. Matched entries by name — links/dates were kept, only bullets & skills were replaced. New entries got their fields filled in. Switch to Form Builder to check.','ok');
   syncFormFromState();
@@ -642,8 +658,8 @@ function syncFormFromState(){
   document.getElementById('edu-degree').value = state.education.degree;
   document.getElementById('edu-gpa').value = state.education.gpa;
   document.getElementById('edu-dates').value = state.education.dates;
-  document.getElementById('certsText').value = state.certs;
-  document.getElementById('pubsText').value = state.pubs;
+  renderCerts();
+  renderPubs();
   renderLinks(); renderSkills(); renderExperience(); renderProjects();
 }
 
@@ -657,7 +673,7 @@ function onEduEdit(){
   state.education.dates=document.getElementById('edu-dates').value;
   renderPreview();
 }
-function onCertsPubsEdit(){ state.certs=document.getElementById('certsText').value; state.pubs=document.getElementById('pubsText').value; renderPreview(); }
+
 
 /* ===== LINKS ===== */
 function renderLinks(){
@@ -813,6 +829,66 @@ function updateBullet(coll, id, bid, val){
   renderPreview();
 }
 
+/* ===== CERTIFICATIONS ===== */
+function renderCerts(){
+  const el=document.getElementById('certsBody');
+  el.innerHTML = state.certifications.map(c=>`
+    <div class="card" style="${c.hidden?'opacity:0.5;':''}">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span> ${esc(c.name||'New Certificate')}</span>
+        <div class="card-actions">
+          <button class="icon-btn" title="${c.hidden?'Show on resume':'Hide from resume'}" onclick="toggleCertHidden('${c.id}')">${c.hidden?'🚫':'👁'}</button>
+          <button class="icon-btn danger" onclick="removeCert('${c.id}')">🗑</button>
+        </div>
+      </div>
+      <label>Certificate Name</label><input type="text" value="${esc(c.name)}" oninput="updateCertField('${c.id}','name',this.value)">
+      <label>Authority</label><input type="text" value="${esc(c.authority)}" oninput="updateCertField('${c.id}','authority',this.value)">
+      <label>Certification URL / Code</label><input type="text" value="${esc(c.url)}" oninput="updateCertField('${c.id}','url',this.value)">
+      <label>Certification Date</label>
+      <div class="row2">${monthYearSelectGeneric(c.id,'month',c.month,'updateCertField')}${monthYearSelectGeneric(c.id,'year',c.year,'updateCertField')}</div>
+    </div>
+  `).join('') + `<button class="add-btn" onclick="addCert()">+ Add</button>`;
+}
+function addCert(){ state.certifications.push({id:nid(), name:'', authority:'', url:'', month:'', year:'', hidden:false}); renderCerts(); renderPreview(); }
+function removeCert(id){ state.certifications=state.certifications.filter(c=>c.id!==id); renderCerts(); renderPreview(); }
+function updateCertField(id,field,val){ const c=state.certifications.find(x=>x.id===id); c[field]=val; renderCerts(); renderPreview(); }
+function toggleCertHidden(id){ const c=state.certifications.find(x=>x.id===id); c.hidden=!c.hidden; renderCerts(); renderPreview(); }
+
+/* ===== PUBLICATIONS ===== */
+function renderPubs(){
+  const el=document.getElementById('pubsBody');
+  el.innerHTML = state.publications.map(p=>`
+    <div class="card" style="${p.hidden?'opacity:0.5;':''}">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span> ${esc(p.awardName||'New Publication')}</span>
+        <div class="card-actions">
+          <button class="icon-btn" title="${p.hidden?'Show on resume':'Hide from resume'}" onclick="togglePubHidden('${p.id}')">${p.hidden?'🚫':'👁'}</button>
+          <button class="icon-btn danger" onclick="removePub('${p.id}')">🗑</button>
+        </div>
+      </div>
+      <label>Award Name</label><input type="text" value="${esc(p.awardName)}" oninput="updatePubField('${p.id}','awardName',this.value)">
+      <label>Issuer</label><input type="text" value="${esc(p.issuer)}" oninput="updatePubField('${p.id}','issuer',this.value)">
+      <label>URL</label><input type="text" value="${esc(p.url)}" oninput="updatePubField('${p.id}','url',this.value)">
+      <label>Awarded Date</label>
+      <div class="row2">${monthYearSelectGeneric(p.id,'month',p.month,'updatePubField')}${monthYearSelectGeneric(p.id,'year',p.year,'updatePubField')}</div>
+      <label>Description</label><textarea oninput="updatePubField('${p.id}','description',this.value)">${esc(p.description)}</textarea>
+    </div>
+  `).join('') + `<button class="add-btn" onclick="addPub()">+ Add</button>`;
+}
+function addPub(){ state.publications.push({id:nid(), awardName:'', issuer:'', url:'', month:'', year:'', description:'', hidden:false}); renderPubs(); renderPreview(); }
+function removePub(id){ state.publications=state.publications.filter(p=>p.id!==id); renderPubs(); renderPreview(); }
+function updatePubField(id,field,val){ const p=state.publications.find(x=>x.id===id); p[field]=val; renderPubs(); renderPreview(); }
+function togglePubHidden(id){ const p=state.publications.find(x=>x.id===id); p.hidden=!p.hidden; renderPubs(); renderPreview(); }
+
+/* generic month/year dropdown for simple single-date cards (certs/pubs) */
+function monthYearSelectGeneric(id, field, current, updaterFn){
+  const isMonth = field==='month'; const opts = isMonth?MONTHS:YEARS;
+  return `<select onchange="${updaterFn}('${id}','${field}',this.value)">
+    <option value="">--</option>
+    ${opts.map(o=>`<option value="${o}" ${String(o)===String(current)?'selected':''}>${o}</option>`).join('')}
+  </select>`;
+}
+
 /* ===== PREVIEW ===== */
 function dateStr(m,y){
   if(!m && !y) return '';
@@ -855,8 +931,16 @@ function renderPreview(){
     </div>`;
   }).join('') : '<span class="empty-note">—</span>';
 
-  document.getElementById('r-certs').innerHTML = state.certs ? state.certs.split('\n').filter(Boolean).map(l=>`<div>${esc(l)}</div>`).join('') : '<span class="empty-note">—</span>';
-  document.getElementById('r-pubs').innerHTML = state.pubs ? `<div style="white-space:pre-wrap;">${esc(state.pubs)}</div>` : '<span class="empty-note">—</span>';
+  document.getElementById('r-certs').innerHTML = state.certifications.filter(c=>!c.hidden && (c.name||c.authority)).length ? state.certifications.filter(c=>!c.hidden && (c.name||c.authority)).map(c=>{
+    const dates = dateStr(c.month, c.year);
+    return `<div class="r-row"><span>${esc(c.name)}${c.authority?' — '+esc(c.authority):''}</span>${dates?`<span>${esc(dates)}</span>`:''}</div>`;
+  }).join('') : '<span class="empty-note">—</span>';
+
+  document.getElementById('r-pubs').innerHTML = state.publications.filter(p=>!p.hidden && (p.awardName||p.description)).length ? state.publications.filter(p=>!p.hidden && (p.awardName||p.description)).map(p=>{
+    const dates = dateStr(p.month, p.year);
+    return `<div class="r-row"><span class="r-title">${esc(p.awardName)}${p.issuer?' — '+esc(p.issuer):''}</span>${dates?`<span>${esc(dates)}</span>`:''}</div>
+    ${p.description?`<div style="font-size:1em;white-space:pre-wrap;margin-bottom:6px;">${esc(p.description)}</div>`:''}`;
+  }).join('') : '<span class="empty-note">—</span>';
 }
 
 /* ===== AUTOSAVE / RESTORE (persists across reloads via browser localStorage) ===== */
@@ -966,7 +1050,7 @@ function updateDownloadFormat(){
   window.addEventListener('touchend', ()=>{ dragging=false; handle.classList.remove('dragging'); });
 })();
 
-renderLinks(); renderSkills(); renderExperience(); renderProjects();
+renderLinks(); renderSkills(); renderExperience(); renderProjects(); renderCerts(); renderPubs();
 restoreState(); // pulls in any autosaved data from a previous session, then renders
 </script>
 </body>
