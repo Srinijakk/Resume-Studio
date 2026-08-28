@@ -11,8 +11,16 @@
   }
   *{box-sizing:border-box;}
   body{margin:0; font-family:'Helvetica Neue',Arial,sans-serif; background:var(--shell); color:var(--ink); font-size:14px;}
-  .app{display:grid; grid-template-columns: 460px 1fr; min-height:100vh;}
-  @media (max-width: 980px){ .app{grid-template-columns: 1fr;} }
+  .app{display:grid; grid-template-columns: 460px 6px 1fr; min-height:100vh;}
+  .resize-handle{
+    background:var(--rule); cursor:col-resize; position:relative; z-index:10;
+  }
+  .resize-handle:hover, .resize-handle.dragging{ background:var(--accent); }
+  .resize-handle::after{
+    content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:3px; height:36px; border-radius:2px; background:rgba(255,255,255,0.6);
+  }
+  @media (max-width: 980px){ .app{grid-template-columns: 1fr;} .resize-handle{display:none;} }
 
   .panel{background:var(--panel); border-right:1px solid var(--rule); display:flex; flex-direction:column; max-height:100vh;}
 
@@ -187,6 +195,10 @@
         <label>Accent Color</label>
         <input type="color" id="st-accent" value="#3057d5" oninput="applyStyles()">
       </div>
+      <div class="style-row">
+        <label>PDF Filename</label>
+        <input type="text" id="st-filename" value="KSrinija_AIML_Engineer resume.pdf">
+      </div>
     </div>
   </div>
 
@@ -273,6 +285,8 @@
     <button type="button" class="download-btn" onclick="return downloadPDF(event)">Download as PDF</button>
   </div>
 </div>
+
+<div class="resize-handle" id="resizeHandle"></div>
 
 <div class="preview-wrap">
   <div id="resume">
@@ -770,7 +784,9 @@ function downloadPDF(event){
       alert('PDF library failed to load (check your internet connection) — try again in a moment.');
       return false;
     }
-    const opt={ margin:0, filename:'resume.pdf', image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'in',format:format,orientation:'portrait'} };
+    let filename = (document.getElementById('st-filename').value || 'resume.pdf').trim();
+    if(!filename.toLowerCase().endsWith('.pdf')) filename += '.pdf';
+    const opt={ margin:0, filename:filename, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'in',format:format,orientation:'portrait'} };
     html2pdf().set(opt).from(document.getElementById('resume')).save();
   } catch(err){
     console.error('downloadPDF failed', err);
@@ -813,6 +829,42 @@ function updateDownloadFormat(){
   const paper = document.getElementById('st-paper').value;
   return paper==='a4' ? 'a4' : 'letter';
 }
+
+/* ===== RESIZABLE SIDEBAR ===== */
+(function(){
+  const handle = document.getElementById('resizeHandle');
+  const app = document.querySelector('.app');
+  let dragging = false;
+  handle.addEventListener('mousedown', (e)=>{
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const min = 320, max = Math.min(900, window.innerWidth - 300);
+    let newWidth = Math.max(min, Math.min(max, e.clientX));
+    app.style.gridTemplateColumns = newWidth + 'px 6px 1fr';
+  });
+  window.addEventListener('mouseup', ()=>{
+    if(dragging){
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.userSelect = '';
+    }
+  });
+  // touch support
+  handle.addEventListener('touchstart', ()=>{ dragging=true; handle.classList.add('dragging'); }, {passive:true});
+  window.addEventListener('touchmove', (e)=>{
+    if(!dragging) return;
+    const x = e.touches[0].clientX;
+    const min = 320, max = Math.min(900, window.innerWidth - 300);
+    const newWidth = Math.max(min, Math.min(max, x));
+    app.style.gridTemplateColumns = newWidth + 'px 6px 1fr';
+  }, {passive:true});
+  window.addEventListener('touchend', ()=>{ dragging=false; handle.classList.remove('dragging'); });
+})();
 
 renderLinks(); renderSkills(); renderExperience(); renderProjects();
 restoreState(); // pulls in any autosaved data from a previous session, then renders
