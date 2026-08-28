@@ -206,11 +206,27 @@
 
     <!-- ===== AI ASSISTANT TAB ===== -->
     <div class="tab-pane active" id="pane-ai">
-      <div class="ai-sub">Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). It parses and fills the resume as-is — no rewriting. Switch to <b>Form Builder</b> anytime to fine-tune individual fields; both tabs share the same resume.</div>
+
+      <div class="style-row">
+        <label>What are you updating?</label>
+        <select id="target-select" onchange="onTargetChange()">
+          <option value="full">Full Resume (needs SUMMARY/SKILLS/EXPERIENCE/... headers)</option>
+          <option value="summary">Summary only</option>
+          <option value="skills">Skills only</option>
+          <option value="experience">One Experience entry (bullets only)</option>
+          <option value="project">One Project entry (bullets only)</option>
+        </select>
+      </div>
+      <div class="style-row" id="entry-select-wrap" style="display:none;">
+        <label>Which entry?</label>
+        <select id="entry-select"></select>
+      </div>
+
+      <div class="ai-sub" id="ai-sub-text">Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). It parses and fills the resume as-is — no rewriting. Switch to <b>Form Builder</b> anytime to fine-tune individual fields; both tabs share the same resume.</div>
       <textarea id="pasteBox" placeholder="Paste your full tailored resume text here..."></textarea>
-      <button class="parse-btn" onclick="parseAndFill()">Parse &amp; Fill Resume</button>
+      <button class="parse-btn" onclick="handleApply()">Apply</button>
       <div class="status" id="statusBox"></div>
-      <div class="hint">Parser now works without bullet markers too: leave a <b>blank line between each job/project entry</b>, and within an entry, sentence-like lines (ending in "." ) are treated as bullets automatically — short lines like title/company/dates/location are kept as header info. Explicit •/-/* markers still work if present.</div>
+      <div class="hint" id="ai-hint-text">Parser now works without bullet markers too: leave a <b>blank line between each job/project entry</b>, and within an entry, sentence-like lines (ending in "." ) are treated as bullets automatically — short lines like title/company/dates/location are kept as header info. Explicit •/-/* markers still work if present.</div>
     </div>
 
     <!-- ===== FORM BUILDER TAB ===== -->
@@ -339,6 +355,7 @@ function switchTab(tab){
   document.querySelectorAll('.top-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('pane-'+tab).classList.add('active');
+  if(tab==='ai') onTargetChange();
 }
 
 function toggleSec(headEl){
@@ -526,6 +543,84 @@ function parseAndFill(){
   renderPreview();
 }
 function showStatus(msg,type){ const b=document.getElementById('statusBox'); b.textContent=msg; b.className='status '+type; }
+
+/* ===== TARGETED UPDATE MODE ===== */
+const TARGET_COPY = {
+  full: { sub: "Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). It parses and fills the resume as-is — no rewriting.", hint: 'Leave a blank line between each job/project entry. Sentence-like lines become bullets automatically; short lines stay as header info.', placeholder: 'Paste your full tailored resume text here...' },
+  summary: { sub: "Paste just the new Summary paragraph. It replaces only the Summary — nothing else changes.", hint: '', placeholder: 'Paste the tailored summary paragraph here...' },
+  skills: { sub: "Paste skills lines like \"Category: skill1, skill2, skill3\" — one per line. Matching categories get their values replaced; unmentioned categories are left as-is; new categories get added.", hint: '', placeholder: 'Programming & Core: Python, SQL, REST APIs...' },
+  experience: { sub: "Pick which job below, then paste just its new bullet points (one per line, marker optional). Company, title, dates, and location stay untouched.", hint: '', placeholder: 'Paste the new bullet points for this role, one per line...' },
+  project: { sub: "Pick which project below, then paste just its new bullet points (one per line, marker optional). Project name, link, and dates stay untouched.", hint: '', placeholder: 'Paste the new bullet points for this project, one per line...' }
+};
+
+function onTargetChange(){
+  const target = document.getElementById('target-select').value;
+  const copy = TARGET_COPY[target];
+  document.getElementById('ai-sub-text').innerHTML = copy.sub;
+  document.getElementById('ai-hint-text').innerHTML = copy.hint;
+  document.getElementById('pasteBox').placeholder = copy.placeholder;
+  document.getElementById('ai-hint-text').style.display = copy.hint ? 'block' : 'none';
+
+  const wrap = document.getElementById('entry-select-wrap');
+  const sel = document.getElementById('entry-select');
+  if(target==='experience'){
+    wrap.style.display='block';
+    sel.innerHTML = state.experience.map(e=>`<option value="${e.id}">${esc(e.jobTitle||'Untitled role')} — ${esc(e.company||'no company')}</option>`).join('') || '<option value="">No experience entries yet — add one in Form Builder first</option>';
+  } else if(target==='project'){
+    wrap.style.display='block';
+    sel.innerHTML = state.projects.map(p=>`<option value="${p.id}">${esc(p.name||'Untitled project')}</option>`).join('') || '<option value="">No project entries yet — add one in Form Builder first</option>';
+  } else {
+    wrap.style.display='none';
+  }
+}
+
+function handleApply(){
+  const target = document.getElementById('target-select').value;
+  const text = document.getElementById('pasteBox').value;
+  if(!text.trim()){ showStatus('Paste something first.','warn'); return; }
+
+  if(target==='full'){ parseAndFill(); return; }
+
+  if(target==='summary'){
+    state.summary = text.trim().replace(/\s+/g,' ');
+    document.getElementById('summaryText').value = state.summary;
+    renderPreview();
+    showStatus('Summary updated. Nothing else was touched.','ok');
+    return;
+  }
+
+  if(target==='skills'){
+    const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+    let updated=0, added=0;
+    lines.forEach(line=>{
+      const m = line.match(/^([^:]+):\s*(.+)$/);
+      const cat = m ? m[1].trim() : '';
+      const valsStr = m ? m[2].trim() : line;
+      const newSkills = valsStr.split(',').map(s=>s.trim()).filter(Boolean).map(name=>({id:nid(), name}));
+      const key = cat.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const existing = key ? state.skills.find(c=>c.category.toLowerCase().replace(/[^a-z0-9]/g,'')===key) : null;
+      if(existing){ existing.skills = newSkills; updated++; }
+      else { state.skills.push({id:nid(), category:cat||'New Category', skills:newSkills}); added++; }
+    });
+    renderSkills(); renderPreview();
+    showStatus(`Skills updated: ${updated} categor${updated===1?'y':'ies'} replaced, ${added} added. Other categories left as-is.`,'ok');
+    return;
+  }
+
+  if(target==='experience' || target==='project'){
+    const id = document.getElementById('entry-select').value;
+    if(!id){ showStatus('No entry selected — add one in Form Builder first.','warn'); return; }
+    const bullets = text.split('\n').map(l=>stripBullet(l.trim())).filter(Boolean);
+    const list = target==='experience' ? state.experience : state.projects;
+    const item = list.find(x=>x.id===id);
+    if(!item){ showStatus('Could not find that entry — it may have been deleted.','warn'); return; }
+    item.bullets = bullets.map(t=>({id:nid(), text:t}));
+    target==='experience' ? renderExperience() : renderProjects();
+    renderPreview();
+    showStatus(`Bullets updated for "${target==='experience'?item.jobTitle:item.name}". Everything else on that entry was left untouched.`,'ok');
+    return;
+  }
+}
 
 /* push parsed state into form-builder inputs/cards */
 function syncFormFromState(){
