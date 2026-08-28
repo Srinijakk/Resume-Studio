@@ -102,6 +102,9 @@
 
   .action-bar{background:var(--panel); padding:14px 18px; border-top:1px solid var(--rule);}
   .download-btn{width:100%; background:var(--accent); color:#fff; border:none; padding:12px; font-size:13px; border-radius:7px; cursor:pointer; font-weight:700;}
+  .undo-btn{width:100%; background:#fff; color:var(--ink); border:1px solid var(--rule); padding:10px; font-size:12.5px; border-radius:7px; cursor:pointer; font-weight:600; margin-bottom:8px;}
+  .undo-btn:hover:not(:disabled){ background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .undo-btn:disabled{ color:#bbb; cursor:not-allowed; }
 
   /* preview */
   .preview-wrap{ padding:36px; overflow-y:auto; max-height:100vh; display:flex; justify-content:center; }
@@ -314,6 +317,7 @@
   </div>
 
   <div class="action-bar">
+    <button type="button" id="undoBtn" class="undo-btn" onclick="undoState()" disabled>↶ Undo (0)</button>
     <button type="button" class="download-btn" onclick="return downloadPDF(event)">Download as PDF</button>
     <div class="hint" style="margin-top:8px;">Opens your browser's print dialog — choose "Save as PDF" as the destination. This gives crisp, real text (not a screenshot), matching print-shop quality.</div>
   </div>
@@ -962,6 +966,7 @@ function scheduleSave(){
   saveTimer=setTimeout(()=>{
     try{ localStorage.setItem('resume-studio-state', JSON.stringify(state)); }
     catch(err){ console.warn('autosave failed', err); }
+    checkpointUndo();
   }, 400);
 }
 function restoreState(){
@@ -975,6 +980,51 @@ function restoreState(){
   } catch(err){ /* nothing saved yet, or corrupted — keep defaults */ }
   renderPreview();
 }
+
+/* ===== UNDO (up to 10 checkpoints) =====
+   a checkpoint is captured ~400ms after edits settle (piggybacking on the autosave
+   debounce) rather than on every keystroke, so Undo steps back through meaningful
+   pauses in your editing instead of one character at a time. */
+const MAX_UNDO = 10;
+let undoStack = [];
+let lastSnapshot = null;
+
+function checkpointUndo(){
+  const current = JSON.stringify(state);
+  if(lastSnapshot === null){ lastSnapshot = current; return; } // first load — nothing to undo yet
+  if(current !== lastSnapshot){
+    undoStack.push(lastSnapshot);
+    if(undoStack.length > MAX_UNDO) undoStack.shift();
+    lastSnapshot = current;
+    updateUndoButton();
+  }
+}
+
+function undoState(){
+  if(undoStack.length === 0) return;
+  const prev = undoStack.pop();
+  lastSnapshot = prev; // so the checkpoint after this restore doesn't re-trigger itself
+  const restored = JSON.parse(prev);
+  Object.keys(state).forEach(k => delete state[k]);
+  Object.assign(state, restored);
+  syncFormFromState();
+  renderPreview();
+  updateUndoButton();
+}
+
+function updateUndoButton(){
+  const btn = document.getElementById('undoBtn');
+  if(!btn) return;
+  btn.disabled = undoStack.length === 0;
+  btn.textContent = `↶ Undo (${undoStack.length})`;
+}
+
+document.addEventListener('keydown', (e)=>{
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='z'){
+    e.preventDefault();
+    undoState();
+  }
+});
 
 /* ===== PDF DOWNLOAD (no page navigation/reload) ===== */
 function downloadPDF(event){
