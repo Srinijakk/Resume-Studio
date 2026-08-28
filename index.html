@@ -873,6 +873,8 @@ function restoreState(){
 /* ===== PDF DOWNLOAD (no page navigation/reload) ===== */
 function downloadPDF(event){
   if(event){ event.preventDefault(); }
+  const resumeEl = document.getElementById('resume');
+  const originalMinHeight = resumeEl.style.minHeight;
   try{
     const format = updateDownloadFormat();
     if(typeof html2pdf === 'undefined'){
@@ -882,8 +884,20 @@ function downloadPDF(event){
     let filename = (document.getElementById('st-filename').value || 'resume.pdf').trim();
     if(!filename.toLowerCase().endsWith('.pdf')) filename += '.pdf';
     const opt={ margin:0, filename:filename, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'in',format:format,orientation:'portrait'} };
-    html2pdf().set(opt).from(document.getElementById('resume')).save();
+
+    // the min-height set by applyStyles() is purely for the on-screen paper look —
+    // exporting with it still applied pads the canvas past the real content height,
+    // which can spill a blank second page. Drop it just for the capture, then restore.
+    resumeEl.style.minHeight = 'auto';
+    html2pdf().set(opt).from(resumeEl).save()
+      .then(()=>{ resumeEl.style.minHeight = originalMinHeight; })
+      .catch(err=>{
+        resumeEl.style.minHeight = originalMinHeight;
+        console.error('downloadPDF failed', err);
+        alert('Could not generate the PDF: ' + err.message);
+      });
   } catch(err){
+    resumeEl.style.minHeight = originalMinHeight;
     console.error('downloadPDF failed', err);
     alert('Could not generate the PDF: ' + err.message);
   }
