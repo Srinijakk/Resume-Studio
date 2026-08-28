@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Resume Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e2e2e2; --panel:#ffffff;
+    --accent:#3057d5; --accent-soft:#eaf0ff; --danger:#c0392b; --shell:#f5f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Helvetica Neue',Arial,sans-serif; background:var(--shell); color:var(--ink); font-size:14px;}
+  .app{display:grid; grid-template-columns: 460px 1fr; min-height:100vh;}
+  @media (max-width: 980px){ .app{grid-template-columns: 1fr;} }
+
+  .panel{background:var(--panel); border-right:1px solid var(--rule); display:flex; flex-direction:column; max-height:100vh;}
+
+  /* top tabs */
+  .top-tabs{display:flex; border-bottom:1px solid var(--rule); position:sticky; top:0; background:#fff; z-index:5;}
+  .top-tab{
+    flex:1; text-align:center; padding:14px 10px; font-size:13px; font-weight:700; cursor:pointer;
+    color:var(--muted); border-bottom:3px solid transparent;
+  }
+  .top-tab.active{ color:var(--accent); border-bottom-color:var(--accent); background:var(--accent-soft); }
+
+  /* style settings (applies to both tabs) */
+  .style-sec{border-bottom:1px solid var(--rule); background:#fff;}
+  .style-sec .sec-head{background:#fff;}
+  .style-row{margin-bottom:14px;}
+  .style-row:last-child{margin-bottom:0;}
+  .style-row label{font-size:11.5px; color:var(--ink); font-weight:600; margin-bottom:6px;}
+  .style-slider-row{display:flex; align-items:center; gap:10px;}
+  .style-slider-row input[type=range]{flex:1;}
+  .style-slider-row .val-box{width:64px; font-size:11.5px; padding:5px 6px; text-align:center;}
+  input[type=color]{width:100%; height:32px; padding:2px; border:1px solid var(--rule); border-radius:6px; cursor:pointer;}
+
+  .tab-content{ overflow-y:auto; padding:18px; flex:1; }
+  .tab-pane{ display:none; }
+  .tab-pane.active{ display:block; }
+
+  /* ----- AI Assistant tab ----- */
+  .ai-sub{font-size:11.5px; color:var(--muted); margin-bottom:12px; line-height:1.5;}
+  textarea#pasteBox{
+    width:100%; min-height:260px; font-size:12px; line-height:1.5; padding:10px; border:1px solid var(--rule);
+    border-radius:7px; font-family:'SFMono-Regular',Consolas,monospace; resize:vertical;
+  }
+  .parse-btn{ width:100%; background:var(--ink); color:#fff; border:none; padding:12px; font-size:13px; font-weight:700; border-radius:7px; cursor:pointer; margin-top:10px; }
+  .status{ font-size:11.5px; margin-top:10px; padding:8px 10px; border-radius:6px; line-height:1.5; display:none; }
+  .status.ok{ display:block; background:var(--accent-soft); color:var(--accent); }
+  .status.warn{ display:block; background:#fbeee9; color:var(--danger); }
+  .hint{ font-size:10.5px; color:var(--muted); margin-top:10px; line-height:1.4; }
+
+  /* ----- Form builder tab ----- */
+  .sec{border:1px solid var(--rule); border-radius:10px; margin-bottom:14px; overflow:hidden; background:#fff;}
+  .sec-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; cursor:pointer; background:#fafafa;}
+  .sec-head h2{font-size:14px; margin:0; font-weight:700;}
+  .sec-body{padding:14px; display:none;}
+  .sec-body.open{display:block;}
+  .chev{transition:transform .15s;}
+  .chev.open{transform:rotate(180deg);}
+
+  .card{border:1px solid var(--rule); border-radius:8px; padding:12px; margin-bottom:10px; background:#fdfdfd;}
+  .card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .card-head .title{font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:6px;}
+  .card-actions{display:flex; gap:8px; align-items:center;}
+  .icon-btn{border:none; background:none; cursor:pointer; font-size:14px; color:var(--muted); padding:2px;}
+  .icon-btn.danger{color:var(--danger);}
+  .icon-btn:hover{color:var(--ink);}
+  .drag-dots{color:#bbb; cursor:grab; font-size:13px; letter-spacing:1px;}
+
+  label{font-size:11px; color:var(--muted); display:block; margin:8px 0 3px;}
+  label:first-child{margin-top:0;}
+  input[type=text], select, textarea{
+    width:100%; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule);
+    border-radius:6px; font-family:inherit; background:#fff;
+  }
+  textarea{resize:vertical; min-height:50px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .check-row{display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; color:var(--muted);}
+  .check-row input{width:auto;}
+
+  .tag-input-row{display:flex; gap:6px;}
+  .tag-input-row input{flex:1;}
+  .tag-input-row button{ border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; white-space:nowrap; }
+  .tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .tag{ background:var(--accent-soft); color:var(--accent); font-size:11.5px; padding:4px 6px 4px 10px; border-radius:14px; display:flex; align-items:center; gap:6px; }
+  .tag button{border:none; background:none; color:var(--accent); cursor:pointer; font-size:12px; padding:0;}
+
+  .bullet-card{border:1px solid var(--rule); border-radius:8px; padding:8px 10px; margin-bottom:8px; display:flex; gap:8px; align-items:flex-start; background:#fff;}
+  .bullet-card textarea{flex:1; min-height:44px;}
+
+  .add-btn{ width:100%; border:1px dashed var(--accent); background:var(--accent-soft); color:var(--accent); border-radius:7px; padding:8px; font-size:12px; cursor:pointer; margin-top:4px; }
+  .add-entry-btn{ width:100%; background:var(--ink); color:#fff; border:none; border-radius:7px; padding:10px; font-size:12.5px; cursor:pointer; margin-top:6px; font-weight:600; }
+
+  .action-bar{background:var(--panel); padding:14px 18px; border-top:1px solid var(--rule);}
+  .download-btn{width:100%; background:var(--accent); color:#fff; border:none; padding:12px; font-size:13px; border-radius:7px; cursor:pointer; font-weight:700;}
+
+  /* preview */
+  .preview-wrap{ padding:36px; overflow-y:auto; max-height:100vh; display:flex; justify-content:center; }
+  #resume{
+    --resume-font:'Georgia','Times New Roman',serif;
+    --resume-font-size:10.1pt;
+    --resume-line-height:1.125;
+    --resume-pad-x:0.35in;
+    --resume-pad-y:0.28in;
+    --resume-accent:#3057d5;
+    background:#fff; width:800px; max-width:100%; padding:var(--resume-pad-y) var(--resume-pad-x);
+    box-shadow:0 2px 18px rgba(0,0,0,0.08);
+    font-family:var(--resume-font); color:#1a1a1a; font-size:var(--resume-font-size); line-height:var(--resume-line-height);
+  }
+  #resume h1.name{ text-align:center; font-size:1.7em; margin:0 0 4px; }
+  .contact-line{ text-align:center; font-size:0.85em; margin-bottom:14px; color:#333; }
+  .contact-line a{ color:var(--resume-accent); text-decoration:none; }
+  .r-section-title{ font-size:1.05em; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; border-bottom:1.3px solid #1a1a1a; padding-bottom:2px; margin:16px 0 8px; }
+  .r-summary{ font-size:1em; white-space:pre-wrap; }
+  .r-row{ display:flex; justify-content:space-between; font-size:1.02em; gap:10px; margin-top:8px; }
+  .exp-entry:first-child .r-row, .proj-entry:first-child .r-row{ margin-top:0; }
+  .r-title{ font-weight:700; }
+  .r-sub{ font-style:italic; font-size:1em; margin:1px 0 2px; display:flex; justify-content:space-between; }
+  .r-bullets{ margin:2px 0 4px 18px; padding:0; }
+  .r-bullets li{ margin-bottom:1px; font-size:1em; }
+  .r-skill-row{ font-size:1em; margin-bottom:3px; }
+  .r-skill-row b{ display:inline-block; width:200px; vertical-align:top; }
+  .empty-note{ color:#999; font-style:italic; font-size:11.5px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="panel">
+  <div class="top-tabs">
+    <div class="top-tab active" data-tab="ai" onclick="switchTab('ai')">✨ AI Assistant</div>
+    <div class="top-tab" data-tab="form" onclick="switchTab('form')">📝 Form Builder</div>
+  </div>
+
+  <div class="style-sec">
+    <div class="sec-head" onclick="toggleSec(this)"><h2>Style Settings</h2><span class="chev">▾</span></div>
+    <div class="sec-body">
+      <div class="style-row">
+        <label>Paper Size</label>
+        <select id="st-paper" onchange="applyStyles()">
+          <option value="a4">A4 (8.27 x 11.69 inches)</option>
+          <option value="letter">Letter (8.5 x 11 inches)</option>
+        </select>
+      </div>
+      <div class="style-row">
+        <label>Font</label>
+        <select id="st-font" onchange="applyStyles()">
+          <option value="'Georgia','Times New Roman',serif">Georgia</option>
+          <option value="'Times New Roman',Times,serif">Times New Roman</option>
+          <option value="'Garamond',serif">Garamond</option>
+          <option value="'Cambria',serif">Cambria</option>
+          <option value="'Helvetica Neue',Arial,sans-serif">Helvetica Neue</option>
+          <option value="'Calibri',Arial,sans-serif">Calibri</option>
+        </select>
+      </div>
+      <div class="style-row">
+        <label>Font Size (8–11 pt)</label>
+        <div class="style-slider-row">
+          <input type="range" id="st-fontsize" min="8" max="11" step="0.1" value="10.1" oninput="applyStyles()">
+          <input type="text" class="val-box" id="st-fontsize-val" readonly>
+        </div>
+      </div>
+      <div class="style-row">
+        <label>Line Height</label>
+        <div class="style-slider-row">
+          <input type="range" id="st-lineheight" min="1" max="1.6" step="0.005" value="1.125" oninput="applyStyles()">
+          <input type="text" class="val-box" id="st-lineheight-val" readonly>
+        </div>
+      </div>
+      <div class="style-row">
+        <label>Left &amp; Right Margins</label>
+        <div class="style-slider-row">
+          <input type="range" id="st-marginx" min="0.2" max="1" step="0.01" value="0.35" oninput="applyStyles()">
+          <input type="text" class="val-box" id="st-marginx-val" readonly>
+        </div>
+      </div>
+      <div class="style-row">
+        <label>Top &amp; Bottom Margins</label>
+        <div class="style-slider-row">
+          <input type="range" id="st-marginy" min="0.15" max="1" step="0.01" value="0.28" oninput="applyStyles()">
+          <input type="text" class="val-box" id="st-marginy-val" readonly>
+        </div>
+      </div>
+      <div class="style-row">
+        <label>Accent Color</label>
+        <input type="color" id="st-accent" value="#3057d5" oninput="applyStyles()">
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content">
+
+    <!-- ===== AI ASSISTANT TAB ===== -->
+    <div class="tab-pane active" id="pane-ai">
+      <div class="ai-sub">Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). It parses and fills the resume as-is — no rewriting. Switch to <b>Form Builder</b> anytime to fine-tune individual fields; both tabs share the same resume.</div>
+      <textarea id="pasteBox" placeholder="Paste your full tailored resume text here..."></textarea>
+      <button class="parse-btn" onclick="parseAndFill()">Parse &amp; Fill Resume</button>
+      <div class="status" id="statusBox"></div>
+      <div class="hint">Parser now works without bullet markers too: leave a <b>blank line between each job/project entry</b>, and within an entry, sentence-like lines (ending in "." ) are treated as bullets automatically — short lines like title/company/dates/location are kept as header info. Explicit •/-/* markers still work if present.</div>
+    </div>
+
+    <!-- ===== FORM BUILDER TAB ===== -->
+    <div class="tab-pane" id="pane-form">
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Contact</h2><span class="chev">▾</span></div>
+        <div class="sec-body">
+          <label>Full Name</label><input type="text" id="c-name" oninput="onContactEdit()">
+          <div class="row2">
+            <div><label>Phone</label><input type="text" id="c-phone" oninput="onContactEdit()"></div>
+            <div><label>Email</label><input type="text" id="c-email" oninput="onContactEdit()"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Website &amp; Social Links</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="linksBody"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Summary</h2><span class="chev">▾</span></div>
+        <div class="sec-body"><textarea id="summaryText" style="min-height:90px" oninput="onSummaryEdit()"></textarea></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Education</h2><span class="chev">▾</span></div>
+        <div class="sec-body">
+          <label>School / University</label><input type="text" id="edu-school" oninput="onEduEdit()">
+          <label>Degree</label><input type="text" id="edu-degree" oninput="onEduEdit()">
+          <div class="row2">
+            <div><label>GPA</label><input type="text" id="edu-gpa" oninput="onEduEdit()"></div>
+            <div><label>Dates</label><input type="text" id="edu-dates" oninput="onEduEdit()"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Skills</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="skillsBody">
+          <button class="add-btn" onclick="addSkillCategory()">+ Add Category</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Experience</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="expBody">
+          <button class="add-btn" onclick="addExperience()">+ Add Experience</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Projects</h2><span class="chev">▾</span></div>
+        <div class="sec-body" id="projBody">
+          <button class="add-btn" onclick="addProject()">+ Add Project</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head" onclick="toggleSec(this)"><h2>Certifications &amp; Publications</h2><span class="chev">▾</span></div>
+        <div class="sec-body">
+          <label>Certifications (one per line)</label><textarea id="certsText" oninput="onCertsPubsEdit()"></textarea>
+          <label>Publications</label><textarea id="pubsText" oninput="onCertsPubsEdit()"></textarea>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button type="button" class="download-btn" onclick="return downloadPDF(event)">Download as PDF</button>
+  </div>
+</div>
+
+<div class="preview-wrap">
+  <div id="resume">
+    <h1 class="name" id="r-name">Your Name</h1>
+    <div class="contact-line" id="r-contact"></div>
+    <div class="r-section-title">Summary</div>
+    <div class="r-summary" id="r-summary"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Education</div>
+    <div id="r-education"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Skills</div>
+    <div id="r-skills"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Experience</div>
+    <div id="r-experience"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Projects</div>
+    <div id="r-projects"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Certifications</div>
+    <div id="r-certs"><span class="empty-note">—</span></div>
+    <div class="r-section-title">Publications</div>
+    <div id="r-pubs"><span class="empty-note">—</span></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+let idc=0; const nid=()=> 'id'+(++idc);
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const YEARS=[]; for(let y=2018;y<=2028;y++) YEARS.push(y);
+const PLATFORMS=['LinkedIn Profile','GitHub','Portfolio','Leetcode','Personal Website','Twitter/X','Other'];
+const HEADERS=["SUMMARY","EDUCATION","SKILLS","EXPERIENCE","PROJECTS","CERTIFICATIONS","PUBLICATIONS"];
+
+let state = {
+  name:"", phone:"", email:"",
+  links:[
+    {id:nid(), platform:'LinkedIn Profile', label:'LinkedIn', url:''},
+    {id:nid(), platform:'GitHub', label:'GitHub', url:''},
+    {id:nid(), platform:'Portfolio', label:'Portfolio', url:''},
+    {id:nid(), platform:'Leetcode', label:'Leetcode', url:''}
+  ],
+  summary:"",
+  education:{school:"", degree:"", gpa:"", dates:""},
+  skills:[],
+  experience:[],
+  projects:[],
+  certs:"", pubs:""
+};
+
+/* ===== TOP TABS ===== */
+function switchTab(tab){
+  document.querySelectorAll('.top-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-'+tab).classList.add('active');
+}
+
+function toggleSec(headEl){
+  const body = headEl.nextElementSibling;
+  const chev = headEl.querySelector('.chev');
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ===== AI PARSER ===== */
+function isBulletLine(l){ return /^\s*[•\-\*]\s+/.test(l); }
+function stripBullet(l){ return l.replace(/^\s*[•\-\*]\s+/, '').trim(); }
+function isHeaderLine(l){ return HEADERS.includes(l.trim().toUpperCase().replace(/[^A-Z ]/g,'')); }
+function headerName(l){ return l.trim().toUpperCase().replace(/[^A-Z ]/g,''); }
+
+/* split a section's lines into blocks separated by blank lines (one block = one entry),
+   then merge a header-only block into the very next bullet-only block (happens when the
+   pasted text has a blank line between an entry's title and its bullet list). */
+function splitBlocks(lines){
+  const raw=[]; let curr=[];
+  lines.forEach(l=>{
+    if(l.trim()===''){ if(curr.length){ raw.push(curr); curr=[]; } }
+    else curr.push(l.trim());
+  });
+  if(curr.length) raw.push(curr);
+
+  const blocks=[];
+  for(let i=0;i<raw.length;i++){
+    const {header,bullets} = classifyBlock(raw[i]);
+    if(bullets.length===0 && header.length>0 && raw[i+1]){
+      const next = classifyBlock(raw[i+1]);
+      if(next.header.length===0 && next.bullets.length>0){
+        blocks.push([...raw[i], ...raw[i+1]]);
+        i++; // consume the next block too
+        continue;
+      }
+    }
+    blocks.push(raw[i]);
+  }
+  return blocks;
+}
+
+/* within a block, classify each line as header info or a bullet — even without markers.
+   a line is treated as a bullet if it carries an explicit marker, OR if it reads like a
+   full sentence (ends in . or ! and has more than 5 words). everything else is header info. */
+function classifyBlock(blockLines){
+  const header=[], bullets=[];
+  blockLines.forEach(l=>{
+    if(isBulletLine(l)){ bullets.push(stripBullet(l)); return; }
+    const looksLikeSentence = /[.!]$/.test(l) && l.split(/\s+/).length > 5;
+    if(looksLikeSentence){ bullets.push(l); } else { header.push(l); }
+  });
+  return { header, bullets };
+}
+
+const DATE_RE = /(\d{4}|['’]\d{2})/;
+const LOC_RE = /,|onsite|remote|hybrid/i;
+
+/* pull title/company + dates + location out of a header line group for EXPERIENCE blocks.
+   handles lines that mix an em-dash (Title — Company) AND pipes (| Dates | Location) together. */
+function extractExpHeader(headerLines){
+  // flatten: any line containing '|' gets split into separate pieces first
+  let pieces=[];
+  headerLines.forEach(l=>{
+    if(l.includes('|')) pieces.push(...l.split('|').map(s=>s.trim()).filter(Boolean));
+    else pieces.push(l);
+  });
+  let dateRaw='', location='', rest=[];
+  pieces.forEach(l=>{
+    if(!dateRaw && DATE_RE.test(l)){ dateRaw=l; return; }
+    if(!location && LOC_RE.test(l) && l.length<45){ location=l; return; }
+    rest.push(l);
+  });
+  const combined = rest.join(' ');
+  let jobTitle=combined, company='';
+  const dashParts = combined.split(/\s+—\s+|\s+–\s+|\s+-\s+(?=[A-Z])/);
+  if(dashParts.length>=2){ jobTitle=dashParts[0].trim(); company=dashParts.slice(1).join(' - ').trim(); }
+  else if(rest.length>=2){ jobTitle=rest[0]; company=rest.slice(1).join(' '); }
+  return { jobTitle, company, dateRaw, location };
+}
+
+/* pull name/link + dates out of a header line group for PROJECT blocks (supports "Name | Link | Dates" too).
+   does NOT assume a fixed part order after the name — classifies each remaining part as either
+   the date (if it matches a date pattern) or the link, so "Name | Dates" (no link) no longer
+   mistakenly dumps the date text into the Link field. */
+function extractProjHeader(headerLines){
+  const joined = headerLines.join(' | ');
+  if(joined.includes('|')){
+    const parts = joined.split('|').map(s=>s.trim()).filter(Boolean);
+    const name = parts[0]||'';
+    let link='', dateRaw='';
+    parts.slice(1).forEach(p=>{
+      if(DATE_RE.test(p) && !dateRaw){ dateRaw=p; }
+      else if(!link){ link=p; }
+    });
+    return { name, link, dateRaw };
+  }
+  let dateRaw=''; const rest=[];
+  headerLines.forEach(l=>{
+    if(!dateRaw && DATE_RE.test(l)){ dateRaw=l; } else { rest.push(l); }
+  });
+  return { name: rest.join(' '), link:'', dateRaw };
+}
+
+function parseAndFill(){
+  const raw=document.getElementById('pasteBox').value;
+  if(!raw.trim()){ showStatus('Paste your tailored resume text first.','warn'); return; }
+  const lines=raw.split('\n');
+  let sections={}; let current=null;
+  lines.forEach(line=>{
+    if(isHeaderLine(line)){ current=headerName(line); sections[current]=[]; }
+    else if(current){ sections[current].push(line); }
+  });
+  const found=Object.keys(sections);
+  if(found.length===0){ showStatus("Couldn't find recognizable headers (SUMMARY, EXPERIENCE, PROJECTS, SKILLS...). Make sure they're standalone lines.",'warn'); return; }
+
+  state.summary = (sections['SUMMARY']||[]).join(' ').replace(/\s+/g,' ').trim();
+
+  const eduLines=(sections['EDUCATION']||[]).map(l=>l.trim()).filter(Boolean);
+  if(eduLines[0]){
+    const parts=eduLines[0].split('|').map(s=>s.trim());
+    state.education.school = parts[0] || '';
+    state.education.degree = parts[1] || '';
+    state.education.gpa = (parts[2]||'').replace(/GPA:?/i,'').trim();
+    state.education.dates = parts[3] || '';
+  }
+
+  state.skills = (sections['SKILLS']||[]).map(l=>l.trim()).filter(Boolean).map(line=>{
+    let m = line.match(/^(.+?)\s{2,}(.+)$/) || line.match(/^([^:]+):\s*(.+)$/);
+    const cat = m ? m[1].trim() : '';
+    const valsStr = m ? m[2].trim() : line;
+    return { id:nid(), category:cat, skills: valsStr.split(',').map(s=>s.trim()).filter(Boolean).map(name=>({id:nid(),name})) };
+  });
+
+  const normKey = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+  const parsedExp = splitBlocks(sections['EXPERIENCE']||[]).map(blockLines=>{
+    const {header, bullets} = classifyBlock(blockLines);
+    const h = extractExpHeader(header);
+    return { h, bullets };
+  });
+  state.experience = parsedExp.map(({h,bullets})=>{
+    const key = normKey(h.company) || normKey(h.jobTitle);
+    const existing = state.experience.find(e => normKey(e.company)===key && key);
+    if(existing){
+      existing.bullets = bullets.map(t=>({id:nid(), text:t}));
+      if(h.jobTitle && !existing.jobTitle) existing.jobTitle = h.jobTitle;
+      if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
+      return existing;
+    }
+    return {
+      id:nid(), jobTitle:h.jobTitle, company:h.company, city:h.location, country:'', remote:/remote/i.test(h.location),
+      startMonth:'', startYear:'', endMonth:'', endYear:'', current:false,
+      roleDescription:'', dateRaw:h.dateRaw,
+      bullets: bullets.map(t=>({id:nid(), text:t}))
+    };
+  });
+
+  const parsedProj = splitBlocks(sections['PROJECTS']||[]).map(blockLines=>{
+    const {header, bullets} = classifyBlock(blockLines);
+    const h = extractProjHeader(header);
+    return { h, bullets };
+  });
+  state.projects = parsedProj.map(({h,bullets})=>{
+    const key = normKey(h.name);
+    const existing = state.projects.find(p => normKey(p.name)===key && key);
+    if(existing){
+      existing.bullets = bullets.map(t=>({id:nid(), text:t}));
+      if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
+      // keep existing.link untouched — project links don't change when only bullets are tailored
+      return existing;
+    }
+    return {
+      id:nid(), name:h.name, link:h.link, startMonth:'', startYear:'', endMonth:'', endYear:'', dateRaw:h.dateRaw,
+      bullets: bullets.map(t=>({id:nid(), text:t}))
+    };
+  });
+
+  state.certs = (sections['CERTIFICATIONS']||[]).map(l=>l.trim()).filter(Boolean).join('\n');
+  state.pubs = (sections['PUBLICATIONS']||[]).map(l=>l.trim()).filter(Boolean).join('\n');
+
+  showStatus('Parsed: '+found.join(', ')+'. Matched entries by name — links/dates were kept, only bullets & skills were replaced. New entries got their fields filled in. Switch to Form Builder to check.','ok');
+  syncFormFromState();
+  renderPreview();
+}
+function showStatus(msg,type){ const b=document.getElementById('statusBox'); b.textContent=msg; b.className='status '+type; }
+
+/* push parsed state into form-builder inputs/cards */
+function syncFormFromState(){
+  document.getElementById('c-name').value = state.name;
+  document.getElementById('c-phone').value = state.phone;
+  document.getElementById('c-email').value = state.email;
+  document.getElementById('summaryText').value = state.summary;
+  document.getElementById('edu-school').value = state.education.school;
+  document.getElementById('edu-degree').value = state.education.degree;
+  document.getElementById('edu-gpa').value = state.education.gpa;
+  document.getElementById('edu-dates').value = state.education.dates;
+  document.getElementById('certsText').value = state.certs;
+  document.getElementById('pubsText').value = state.pubs;
+  renderLinks(); renderSkills(); renderExperience(); renderProjects();
+}
+
+/* ===== CONTACT / SUMMARY / EDU direct edits ===== */
+function onContactEdit(){ state.name=document.getElementById('c-name').value; state.phone=document.getElementById('c-phone').value; state.email=document.getElementById('c-email').value; renderPreview(); }
+function onSummaryEdit(){ state.summary=document.getElementById('summaryText').value; renderPreview(); }
+function onEduEdit(){
+  state.education.school=document.getElementById('edu-school').value;
+  state.education.degree=document.getElementById('edu-degree').value;
+  state.education.gpa=document.getElementById('edu-gpa').value;
+  state.education.dates=document.getElementById('edu-dates').value;
+  renderPreview();
+}
+function onCertsPubsEdit(){ state.certs=document.getElementById('certsText').value; state.pubs=document.getElementById('pubsText').value; renderPreview(); }
+
+/* ===== LINKS ===== */
+function renderLinks(){
+  const el=document.getElementById('linksBody');
+  el.innerHTML = state.links.map(l=>`
+    <div class="card">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span> ${esc(l.label||l.platform)}</span>
+        <div class="card-actions"><button class="icon-btn danger" onclick="removeLink('${l.id}')">🗑</button></div>
+      </div>
+      <label>Select Website or social media</label>
+      <select onchange="updateLink('${l.id}','platform',this.value)">
+        ${PLATFORMS.map(p=>`<option value="${p}" ${p===l.platform?'selected':''}>${p}</option>`).join('')}
+      </select>
+      <label>Label Name</label>
+      <input type="text" value="${esc(l.label)}" oninput="updateLink('${l.id}','label',this.value)">
+      <label>URL</label>
+      <input type="text" placeholder="https://..." value="${esc(l.url)}" oninput="updateLink('${l.id}','url',this.value)">
+    </div>
+  `).join('') + `<button class="add-btn" onclick="addLink()">+ Add Link</button>`;
+}
+function addLink(){ state.links.push({id:nid(), platform:'Other', label:'', url:''}); renderLinks(); }
+function removeLink(id){ state.links=state.links.filter(l=>l.id!==id); renderLinks(); renderPreview(); }
+function updateLink(id,field,val){ const l=state.links.find(x=>x.id===id); l[field]=val; renderLinks(); renderPreview(); }
+
+/* ===== SKILLS ===== */
+function renderSkills(){
+  const el=document.getElementById('skillsBody');
+  el.innerHTML = state.skills.map(cat=>`
+    <div class="card">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span></span>
+        <div class="card-actions"><button class="icon-btn danger" onclick="removeSkillCat('${cat.id}')">🗑</button></div>
+      </div>
+      <label>Category</label>
+      <input type="text" value="${esc(cat.category)}" oninput="updateSkillCat('${cat.id}',this.value)">
+      <label>Skills</label>
+      <div class="tag-input-row">
+        <input type="text" placeholder="Type a skill and click Add" id="skillinput-${cat.id}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSkillTag('${cat.id}')}">
+        <button onclick="addSkillTag('${cat.id}')">Add</button>
+      </div>
+      <div class="tags">${cat.skills.map(s=>`<span class="tag">${esc(s.name)}<button onclick="removeSkillTag('${cat.id}','${s.id}')">✕</button></span>`).join('')}</div>
+    </div>
+  `).join('') + `<button class="add-btn" onclick="addSkillCategory()">+ Add Category</button>`;
+}
+function addSkillCategory(){ state.skills.push({id:nid(), category:'New Category', skills:[]}); renderSkills(); renderPreview(); }
+function removeSkillCat(id){ state.skills=state.skills.filter(c=>c.id!==id); renderSkills(); renderPreview(); }
+function updateSkillCat(id,val){ const c=state.skills.find(x=>x.id===id); c.category=val; renderPreview(); }
+function addSkillTag(catId){
+  const input=document.getElementById('skillinput-'+catId);
+  const val=input.value.trim(); if(!val) return;
+  state.skills.find(x=>x.id===catId).skills.push({id:nid(), name:val});
+  renderSkills(); renderPreview();
+  document.getElementById('skillinput-'+catId).focus();
+}
+function removeSkillTag(catId, skillId){
+  const c=state.skills.find(x=>x.id===catId);
+  c.skills=c.skills.filter(s=>s.id!==skillId);
+  renderSkills(); renderPreview();
+}
+
+/* ===== EXPERIENCE ===== */
+function monthYearSelect(id, field, current, coll){
+  const isMonth=field.includes('Month'); const opts=isMonth?MONTHS:YEARS;
+  return `<select onchange="updateExpOrProjField('${id}','${field}',this.value,'${coll}')">
+    <option value="">--</option>
+    ${opts.map(o=>`<option value="${o}" ${String(o)===String(current)?'selected':''}>${o}</option>`).join('')}
+  </select>`;
+}
+function renderExperience(){
+  const el=document.getElementById('expBody');
+  el.innerHTML = state.experience.map(e=>`
+    <div class="card">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span> ${esc(e.jobTitle||'New Role')} ${e.company?'at '+esc(e.company):''}</span>
+        <div class="card-actions"><button class="icon-btn danger" onclick="removeExp('${e.id}')">🗑</button></div>
+      </div>
+      ${e.dateRaw?`<div class="hint" style="margin:0 0 8px;">Parsed date text: "${esc(e.dateRaw)}" — set exact Start/End below.</div>`:''}
+      <label>Company Name</label><input type="text" value="${esc(e.company)}" oninput="updateExpOrProjField('${e.id}','company',this.value,'experience')">
+      <label>Company URL</label><input type="text" value="${esc(e.companyUrl)}" oninput="updateExpOrProjField('${e.id}','companyUrl',this.value,'experience')">
+      <label>Job Title</label><input type="text" value="${esc(e.jobTitle)}" oninput="updateExpOrProjField('${e.id}','jobTitle',this.value,'experience')">
+      <div class="row2">
+        <div><label>City, State</label><input type="text" value="${esc(e.city)}" oninput="updateExpOrProjField('${e.id}','city',this.value,'experience')"></div>
+        <div><label>Country</label><input type="text" value="${esc(e.country)}" oninput="updateExpOrProjField('${e.id}','country',this.value,'experience')"></div>
+      </div>
+      <div class="check-row"><input type="checkbox" ${e.remote?'checked':''} onchange="updateExpOrProjField('${e.id}','remote',this.checked,'experience')"> Remote Position</div>
+      <label>Start</label><div class="row2">${monthYearSelect(e.id,'startMonth',e.startMonth,'experience')}${monthYearSelect(e.id,'startYear',e.startYear,'experience')}</div>
+      <label>End</label><div class="row2">${monthYearSelect(e.id,'endMonth',e.endMonth,'experience')}${monthYearSelect(e.id,'endYear',e.endYear,'experience')}</div>
+      <div class="check-row"><input type="checkbox" ${e.current?'checked':''} onchange="updateExpOrProjField('${e.id}','current',this.checked,'experience')"> I am currently working here</div>
+      <label>Role Description</label><textarea oninput="updateExpOrProjField('${e.id}','roleDescription',this.value,'experience')">${esc(e.roleDescription)}</textarea>
+      <label style="margin-top:12px;">Bullets</label>
+      ${e.bullets.map(b=>`<div class="bullet-card"><span class="drag-dots">⠿⠿</span><textarea oninput="updateBullet('experience','${e.id}','${b.id}',this.value)">${esc(b.text)}</textarea><button class="icon-btn danger" onclick="removeBullet('experience','${e.id}','${b.id}')">🗑</button></div>`).join('')}
+      <button class="add-btn" onclick="addBullet('experience','${e.id}')">+ Add Bullet</button>
+    </div>
+  `).join('') + `<button class="add-entry-btn" onclick="addExperience()">+ Add Experience</button>`;
+}
+function addExperience(){
+  state.experience.push({id:nid(), company:'', companyUrl:'', jobTitle:'', city:'', country:'', remote:false, startMonth:'', startYear:'', endMonth:'', endYear:'', current:false, roleDescription:'', bullets:[]});
+  renderExperience(); renderPreview();
+}
+function removeExp(id){ state.experience=state.experience.filter(e=>e.id!==id); renderExperience(); renderPreview(); }
+
+/* ===== PROJECTS ===== */
+function renderProjects(){
+  const el=document.getElementById('projBody');
+  el.innerHTML = state.projects.map(p=>`
+    <div class="card">
+      <div class="card-head">
+        <span class="title"><span class="drag-dots">⠿⠿</span> ${esc(p.name||'New Project')}</span>
+        <div class="card-actions"><button class="icon-btn danger" onclick="removeProj('${p.id}')">🗑</button></div>
+      </div>
+      ${p.dateRaw?`<div class="hint" style="margin:0 0 8px;">Parsed date text: "${esc(p.dateRaw)}" — set exact Start/End below.</div>`:''}
+      <label>Project Name</label><input type="text" value="${esc(p.name)}" oninput="updateExpOrProjField('${p.id}','name',this.value,'projects')">
+      <label>Project Link</label><input type="text" value="${esc(p.link)}" oninput="updateExpOrProjField('${p.id}','link',this.value,'projects')">
+      <label>Start</label><div class="row2">${monthYearSelect(p.id,'startMonth',p.startMonth,'projects')}${monthYearSelect(p.id,'startYear',p.startYear,'projects')}</div>
+      <label>End</label><div class="row2">${monthYearSelect(p.id,'endMonth',p.endMonth,'projects')}${monthYearSelect(p.id,'endYear',p.endYear,'projects')}</div>
+      <label style="margin-top:12px;">Bullets</label>
+      ${p.bullets.map(b=>`<div class="bullet-card"><span class="drag-dots">⠿⠿</span><textarea oninput="updateBullet('projects','${p.id}','${b.id}',this.value)">${esc(b.text)}</textarea><button class="icon-btn danger" onclick="removeBullet('projects','${p.id}','${b.id}')">🗑</button></div>`).join('')}
+      <button class="add-btn" onclick="addBullet('projects','${p.id}')">+ Add Bullet</button>
+    </div>
+  `).join('') + `<button class="add-entry-btn" onclick="addProject()">+ Add Project</button>`;
+}
+function addProject(){
+  state.projects.push({id:nid(), name:'', link:'', startMonth:'', startYear:'', endMonth:'', endYear:'', bullets:[]});
+  renderProjects(); renderPreview();
+}
+function removeProj(id){ state.projects=state.projects.filter(p=>p.id!==id); renderProjects(); renderPreview(); }
+
+/* shared field/bullet mutators for experience & projects */
+function updateExpOrProjField(id, field, val, coll){
+  const list = coll==='projects' ? state.projects : state.experience;
+  const item = list.find(x=>x.id===id);
+  if(!item){ console.warn('updateExpOrProjField: no entry found', {id, coll}); return; }
+  item[field]=val;
+  if(coll==='projects'){ renderProjects(); } else { renderExperience(); }
+  renderPreview();
+}
+function addBullet(coll, id){
+  const list = coll==='projects'?state.projects:state.experience;
+  list.find(x=>x.id===id).bullets.push({id:nid(), text:''});
+  coll==='projects'?renderProjects():renderExperience(); renderPreview();
+}
+function removeBullet(coll, id, bid){
+  const list = coll==='projects'?state.projects:state.experience;
+  const item=list.find(x=>x.id===id);
+  item.bullets=item.bullets.filter(b=>b.id!==bid);
+  coll==='projects'?renderProjects():renderExperience(); renderPreview();
+}
+function updateBullet(coll, id, bid, val){
+  const list = coll==='projects'?state.projects:state.experience;
+  const item=list.find(x=>x.id===id);
+  item.bullets.find(b=>b.id===bid).text=val;
+  renderPreview();
+}
+
+/* ===== PREVIEW ===== */
+function dateStr(m,y){
+  if(!m && !y) return '';
+  const yy = y ? String(y).slice(-2) : '';
+  return (m ? m.slice(0,3)+" '" : "'") + yy;
+}
+function renderPreview(){
+  scheduleSave();
+  document.getElementById('r-name').textContent = state.name || 'Your Name';
+  const contactParts=[
+    state.phone ? `<span style="color:var(--resume-accent)">${esc(state.phone)}</span>` : '',
+    state.email ? `<span style="color:var(--resume-accent)">${esc(state.email)}</span>` : '',
+    ...state.links.filter(l=>l.url||l.label).map(l=>`<a href="${esc(l.url)||'#'}">${esc(l.label||l.platform)}</a>`)
+  ];
+  document.getElementById('r-contact').innerHTML = contactParts.filter(Boolean).join(' ◇ ');
+
+  document.getElementById('r-summary').innerHTML = state.summary ? esc(state.summary) : '<span class="empty-note">—</span>';
+
+  const edu=state.education;
+  document.getElementById('r-education').innerHTML = (edu.school||edu.degree) ? `<div class="r-row"><span>${esc(edu.school)}${edu.degree?': '+esc(edu.degree):''}${edu.gpa?' (GPA: '+esc(edu.gpa)+')':''}</span><span>${esc(edu.dates)}</span></div>` : '<span class="empty-note">—</span>';
+
+  document.getElementById('r-skills').innerHTML = state.skills.length ? state.skills.filter(c=>c.skills.length).map(c=>`<div class="r-skill-row"><b>${esc(c.category)}</b>${c.skills.map(s=>esc(s.name)).join(', ')}</div>`).join('') : '<span class="empty-note">—</span>';
+
+  document.getElementById('r-experience').innerHTML = state.experience.length ? state.experience.map(e=>{
+    const dates = (e.startYear ? (e.current ? dateStr(e.startMonth,e.startYear)+' — Present' : dateStr(e.startMonth,e.startYear)+' — '+dateStr(e.endMonth,e.endYear)) : e.dateRaw) || '';
+    const loc = e.city || (e.remote ? 'Remote' : e.country) || '';
+    return `<div class="exp-entry">
+    <div class="r-row"><span class="r-title">${esc(e.company)}</span><span>${esc(dates)}</span></div>
+    <div class="r-sub"><span>${esc(e.jobTitle)}</span><span>${esc(loc)}</span></div>
+    ${e.roleDescription?`<div style="font-size:1em;margin-bottom:2px;">${esc(e.roleDescription)}</div>`:''}
+    ${e.bullets.filter(b=>b.text).length ? `<ul class="r-bullets">${e.bullets.filter(b=>b.text).map(b=>`<li>${esc(b.text)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }).join('') : '<span class="empty-note">—</span>';
+
+  document.getElementById('r-projects').innerHTML = state.projects.length ? state.projects.map(p=>{
+    const dates = (p.startYear ? dateStr(p.startMonth,p.startYear)+' — '+dateStr(p.endMonth,p.endYear) : p.dateRaw) || '';
+    return `<div class="proj-entry">
+    <div class="r-row"><span class="r-title">${esc(p.name)} ${p.link?`<a href="${esc(p.link)}" style="font-size:0.85em;font-weight:400;">Link</a>`:''}</span><span>${esc(dates)}</span></div>
+    ${p.bullets.filter(b=>b.text).length ? `<ul class="r-bullets">${p.bullets.filter(b=>b.text).map(b=>`<li>${esc(b.text)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }).join('') : '<span class="empty-note">—</span>';
+
+  document.getElementById('r-certs').innerHTML = state.certs ? state.certs.split('\n').filter(Boolean).map(l=>`<div>${esc(l)}</div>`).join('') : '<span class="empty-note">—</span>';
+  document.getElementById('r-pubs').innerHTML = state.pubs ? `<div style="white-space:pre-wrap;">${esc(state.pubs)}</div>` : '<span class="empty-note">—</span>';
+}
+
+/* ===== AUTOSAVE / RESTORE (persists across reloads via browser localStorage) ===== */
+let saveTimer=null;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{ localStorage.setItem('resume-studio-state', JSON.stringify(state)); }
+    catch(err){ console.warn('autosave failed', err); }
+  }, 400);
+}
+function restoreState(){
+  try{
+    const raw = localStorage.getItem('resume-studio-state');
+    if(raw){
+      const saved = JSON.parse(raw);
+      Object.assign(state, saved);
+      syncFormFromState();
+    }
+  } catch(err){ /* nothing saved yet, or corrupted — keep defaults */ }
+  renderPreview();
+}
+
+/* ===== PDF DOWNLOAD (no page navigation/reload) ===== */
+function downloadPDF(event){
+  if(event){ event.preventDefault(); }
+  try{
+    const format = updateDownloadFormat();
+    if(typeof html2pdf === 'undefined'){
+      alert('PDF library failed to load (check your internet connection) — try again in a moment.');
+      return false;
+    }
+    const opt={ margin:0, filename:'resume.pdf', image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'in',format:format,orientation:'portrait'} };
+    html2pdf().set(opt).from(document.getElementById('resume')).save();
+  } catch(err){
+    console.error('downloadPDF failed', err);
+    alert('Could not generate the PDF: ' + err.message);
+  }
+  return false;
+}
+
+/* ===== STYLE SETTINGS ===== */
+function applyStyles(){
+  const resume = document.getElementById('resume');
+  const font = document.getElementById('st-font').value;
+  const fontSize = parseFloat(document.getElementById('st-fontsize').value);
+  const lineHeight = parseFloat(document.getElementById('st-lineheight').value);
+  const marginX = parseFloat(document.getElementById('st-marginx').value);
+  const marginY = parseFloat(document.getElementById('st-marginy').value);
+  const accent = document.getElementById('st-accent').value;
+  const paper = document.getElementById('st-paper').value;
+
+  resume.style.setProperty('--resume-font', font);
+  resume.style.setProperty('--resume-font-size', fontSize+'pt');
+  resume.style.setProperty('--resume-line-height', lineHeight);
+  resume.style.setProperty('--resume-pad-x', marginX+'in');
+  resume.style.setProperty('--resume-pad-y', marginY+'in');
+  resume.style.setProperty('--resume-accent', accent);
+
+  // paper aspect: keep a fixed on-screen width, adjust min-height to match real paper ratio
+  const ratio = paper==='a4' ? (11.69/8.27) : (11/8.5);
+  resume.style.minHeight = Math.round(800*ratio)+'px';
+  resume.dataset.paper = paper;
+
+  document.getElementById('st-fontsize-val').value = fontSize.toFixed(1)+' pt';
+  document.getElementById('st-lineheight-val').value = lineHeight.toFixed(3);
+  document.getElementById('st-marginx-val').value = marginX.toFixed(2)+' in';
+  document.getElementById('st-marginy-val').value = marginY.toFixed(2)+' in';
+}
+applyStyles();
+
+function updateDownloadFormat(){
+  const paper = document.getElementById('st-paper').value;
+  return paper==='a4' ? 'a4' : 'letter';
+}
+
+renderLinks(); renderSkills(); renderExperience(); renderProjects();
+restoreState(); // pulls in any autosaved data from a previous session, then renders
+</script>
+</body>
+</html>
