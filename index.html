@@ -512,82 +512,95 @@ function parseAndFill(){
   const found=Object.keys(sections);
   if(found.length===0){ showStatus("Couldn't find recognizable headers (SUMMARY, EXPERIENCE, PROJECTS, SKILLS...). Make sure they're standalone lines.",'warn'); return; }
 
-  state.summary = (sections['SUMMARY']||[]).join(' ').replace(/\s+/g,' ').trim();
-
-  const eduLines=(sections['EDUCATION']||[]).map(l=>l.trim()).filter(Boolean);
-  if(eduLines[0]){
-    const parts=eduLines[0].split('|').map(s=>s.trim());
-    state.education.school = parts[0] || '';
-    state.education.degree = parts[1] || '';
-    state.education.gpa = (parts[2]||'').replace(/GPA:?/i,'').trim();
-    state.education.dates = parts[3] || '';
+  // only touch a section if its header was actually present in the pasted text —
+  // a missing header means "leave this section alone", not "clear it out"
+  if('SUMMARY' in sections){
+    state.summary = sections['SUMMARY'].join(' ').replace(/\s+/g,' ').trim();
   }
 
-  state.skills = (sections['SKILLS']||[]).map(l=>l.trim()).filter(Boolean).map(line=>{
-    let m = line.match(/^(.+?)\s{2,}(.+)$/) || line.match(/^([^:]+):\s*(.+)$/);
-    const cat = m ? m[1].trim() : '';
-    const valsStr = m ? m[2].trim() : line;
-    return { id:nid(), category:cat, skills: valsStr.split(',').map(s=>s.trim()).filter(Boolean).map(name=>({id:nid(),name})) };
-  });
+  if('EDUCATION' in sections){
+    const eduLines = sections['EDUCATION'].map(l=>l.trim()).filter(Boolean);
+    if(eduLines[0]){
+      const parts=eduLines[0].split('|').map(s=>s.trim());
+      state.education.school = parts[0] || '';
+      state.education.degree = parts[1] || '';
+      state.education.gpa = (parts[2]||'').replace(/GPA:?/i,'').trim();
+      state.education.dates = parts[3] || '';
+    }
+  }
+
+  if('SKILLS' in sections){
+    // full-resume paste also replaces skills wholesale, matching the "Skills only" behavior
+    state.skills = sections['SKILLS'].map(l=>l.trim()).filter(Boolean).map(line=>{
+      let m = line.match(/^(.+?)\s{2,}(.+)$/) || line.match(/^([^:]+):\s*(.+)$/);
+      const cat = m ? m[1].trim() : '';
+      const valsStr = m ? m[2].trim() : line;
+      return { id:nid(), category:cat, skills: valsStr.split(',').map(s=>s.trim()).filter(Boolean).map(name=>({id:nid(),name})) };
+    });
+  }
 
   const normKey = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 
-  const parsedExp = splitBlocks(sections['EXPERIENCE']||[]).map(blockLines=>{
-    const {header, bullets} = classifyBlock(blockLines);
-    const h = extractExpHeader(header);
-    return { h, bullets };
-  });
-  state.experience = parsedExp.map(({h,bullets})=>{
-    const key = normKey(h.company) || normKey(h.jobTitle);
-    const existing = state.experience.find(e => normKey(e.company)===key && key);
-    if(existing){
-      existing.bullets = bullets.map(t=>({id:nid(), text:t}));
-      if(h.jobTitle && !existing.jobTitle) existing.jobTitle = h.jobTitle;
-      if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
-      return existing;
-    }
-    return {
-      id:nid(), jobTitle:h.jobTitle, company:h.company, city:h.location, country:'', remote:/remote/i.test(h.location),
-      startMonth:'', startYear:'', endMonth:'', endYear:'', current:false,
-      roleDescription:'', dateRaw:h.dateRaw,
-      bullets: bullets.map(t=>({id:nid(), text:t}))
-    };
-  });
+  if('EXPERIENCE' in sections){
+    const parsedExp = splitBlocks(sections['EXPERIENCE']).map(blockLines=>{
+      const {header, bullets} = classifyBlock(blockLines);
+      const h = extractExpHeader(header);
+      return { h, bullets };
+    });
+    state.experience = parsedExp.map(({h,bullets})=>{
+      const key = normKey(h.company) || normKey(h.jobTitle);
+      const existing = state.experience.find(e => normKey(e.company)===key && key);
+      if(existing){
+        existing.bullets = bullets.map(t=>({id:nid(), text:t}));
+        if(h.jobTitle && !existing.jobTitle) existing.jobTitle = h.jobTitle;
+        if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
+        return existing;
+      }
+      return {
+        id:nid(), jobTitle:h.jobTitle, company:h.company, city:h.location, country:'', remote:/remote/i.test(h.location),
+        startMonth:'', startYear:'', endMonth:'', endYear:'', current:false,
+        roleDescription:'', dateRaw:h.dateRaw,
+        bullets: bullets.map(t=>({id:nid(), text:t}))
+      };
+    });
+  }
 
-  const parsedProj = splitBlocks(sections['PROJECTS']||[]).map(blockLines=>{
-    const {header, bullets} = classifyBlock(blockLines);
-    const h = extractProjHeader(header);
-    return { h, bullets };
-  });
-  state.projects = parsedProj.map(({h,bullets})=>{
-    const key = normKey(h.name);
-    const existing = state.projects.find(p => normKey(p.name)===key && key);
-    if(existing){
-      existing.bullets = bullets.map(t=>({id:nid(), text:t}));
-      if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
-      // keep existing.link untouched — project links don't change when only bullets are tailored
-      return existing;
-    }
-    return {
-      id:nid(), name:h.name, link:h.link, startMonth:'', startYear:'', endMonth:'', endYear:'', dateRaw:h.dateRaw,
-      bullets: bullets.map(t=>({id:nid(), text:t}))
-    };
-  });
+  if('PROJECTS' in sections){
+    const parsedProj = splitBlocks(sections['PROJECTS']).map(blockLines=>{
+      const {header, bullets} = classifyBlock(blockLines);
+      const h = extractProjHeader(header);
+      return { h, bullets };
+    });
+    state.projects = parsedProj.map(({h,bullets})=>{
+      const key = normKey(h.name);
+      const existing = state.projects.find(p => normKey(p.name)===key && key);
+      if(existing){
+        existing.bullets = bullets.map(t=>({id:nid(), text:t}));
+        if(h.dateRaw && !existing.startYear && !existing.dateRaw) existing.dateRaw = h.dateRaw;
+        // keep existing.link untouched — project links don't change when only bullets are tailored
+        return existing;
+      }
+      return {
+        id:nid(), name:h.name, link:h.link, startMonth:'', startYear:'', endMonth:'', endYear:'', dateRaw:h.dateRaw,
+        bullets: bullets.map(t=>({id:nid(), text:t}))
+      };
+    });
+  }
 
-  const certLines = (sections['CERTIFICATIONS']||[]).map(l=>l.trim()).filter(Boolean);
-  if(certLines.length){
+  if('CERTIFICATIONS' in sections){
+    const certLines = sections['CERTIFICATIONS'].map(l=>l.trim()).filter(Boolean);
     state.certifications = certLines.map(line=>{
       const parts = line.split(/ by | – | - /i);
       return { id:nid(), name: parts[0]||line, authority: parts[1]||'', url:'', month:'', year:'', hidden:false };
     });
   }
 
-  const pubLines = (sections['PUBLICATIONS']||[]).map(l=>l.trim()).filter(Boolean);
-  if(pubLines.length){
-    state.publications = [{ id:nid(), awardName: pubLines[0]||'', issuer: pubLines[1]||'', url:'', month:'', year:'', description: pubLines.slice(2).join(' '), hidden:false }];
+  if('PUBLICATIONS' in sections){
+    const pubLines = sections['PUBLICATIONS'].map(l=>l.trim()).filter(Boolean);
+    state.publications = pubLines.length ? [{ id:nid(), awardName: pubLines[0]||'', issuer: pubLines[1]||'', url:'', month:'', year:'', description: pubLines.slice(2).join(' '), hidden:false }] : [];
   }
 
-  showStatus('Parsed: '+found.join(', ')+'. Matched entries by name — links/dates were kept, only bullets & skills were replaced. New entries got their fields filled in. Switch to Form Builder to check.','ok');
+  showStatus('Updated sections: '+found.join(', ')+'. Anything not mentioned in your paste was left exactly as it was. Switch to Form Builder to check.','ok');
   syncFormFromState();
   renderPreview();
 }
@@ -595,9 +608,9 @@ function showStatus(msg,type){ const b=document.getElementById('statusBox'); b.t
 
 /* ===== TARGETED UPDATE MODE ===== */
 const TARGET_COPY = {
-  full: { sub: "Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). It parses and fills the resume as-is — no rewriting.", hint: 'Leave a blank line between each job/project entry. Sentence-like lines become bullets automatically; short lines stay as header info.', placeholder: 'Paste your full tailored resume text here...' },
+  full: { sub: "Paste your entire JD-tailored resume (with SUMMARY / EDUCATION / SKILLS / EXPERIENCE / PROJECTS / CERTIFICATIONS / PUBLICATIONS headers, bullets starting with •). Only sections whose header is actually present get updated — leave a section's header out entirely and it stays exactly as it was.", hint: 'Leave a blank line between each job/project entry. Sentence-like lines become bullets automatically; short lines stay as header info.', placeholder: 'Paste your full tailored resume text here...' },
   summary: { sub: "Paste just the new Summary paragraph. It replaces only the Summary — nothing else changes.", hint: '', placeholder: 'Paste the tailored summary paragraph here...' },
-  skills: { sub: "Paste skills lines like \"Category: skill1, skill2, skill3\" — one per line. Matching categories get their values replaced; unmentioned categories are left as-is; new categories get added.", hint: '', placeholder: 'Programming & Core: Python, SQL, REST APIs...' },
+  skills: { sub: "Paste skills lines like \"Category: skill1, skill2, skill3\" — one per line. This fully replaces your entire Skills section with exactly what you paste here.", hint: '', placeholder: 'Programming & Core: Python, SQL, REST APIs...' },
   experience: { sub: "Pick which job below, then paste just its new bullet points (one per line, marker optional). Company, title, dates, and location stay untouched.", hint: '', placeholder: 'Paste the new bullet points for this role, one per line...' },
   project: { sub: "Pick which project below, then paste just its new bullet points (one per line, marker optional). Project name, link, and dates stay untouched.", hint: '', placeholder: 'Paste the new bullet points for this project, one per line...' }
 };
@@ -640,19 +653,15 @@ function handleApply(){
 
   if(target==='skills'){
     const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-    let updated=0, added=0;
-    lines.forEach(line=>{
+    state.skills = lines.map(line=>{
       const m = line.match(/^([^:]+):\s*(.+)$/);
       const cat = m ? m[1].trim() : '';
       const valsStr = m ? m[2].trim() : line;
       const newSkills = valsStr.split(',').map(s=>s.trim()).filter(Boolean).map(name=>({id:nid(), name}));
-      const key = cat.toLowerCase().replace(/[^a-z0-9]/g,'');
-      const existing = key ? state.skills.find(c=>c.category.toLowerCase().replace(/[^a-z0-9]/g,'')===key) : null;
-      if(existing){ existing.skills = newSkills; updated++; }
-      else { state.skills.push({id:nid(), category:cat||'New Category', skills:newSkills}); added++; }
+      return { id:nid(), category: cat||'New Category', skills:newSkills };
     });
     renderSkills(); renderPreview();
-    showStatus(`Skills updated: ${updated} categor${updated===1?'y':'ies'} replaced, ${added} added. Other categories left as-is.`,'ok');
+    showStatus(`Skills replaced entirely — now ${state.skills.length} categor${state.skills.length===1?'y':'ies'} matching exactly what you pasted.`,'ok');
     return;
   }
 
