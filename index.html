@@ -123,6 +123,8 @@
       -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
     }
     @page{ margin:0; size:auto; }
+    /* hide Netlify's own injected "Powered by Netlify" badge (unclaimed/free-tier sites) — best-effort selector since we don't control that element's markup */
+    [id*="netlify" i], [class*="netlify" i], iframe[src*="netlify" i]{ display:none !important; }
   }
   #resume{
     --resume-font:'Georgia','Times New Roman',serif;
