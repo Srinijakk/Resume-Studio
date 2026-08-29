@@ -1084,43 +1084,43 @@ function buildPdfDocDefinition(){
   });
   const contactWithSep=[];
   contactRuns.forEach((r,i)=>{ if(i>0) contactWithSep.push({ text:'   ◇   ', color:'#444' }); contactWithSep.push(r); });
-  content.push({ text: contactWithSep, alignment:'center', fontSize: Math.round(fontSizePt*0.85), margin:[0,0,0,10] });
+  content.push({ text: contactWithSep, alignment:'center', fontSize: Math.round(fontSizePt*0.85), margin:[0,0,0,6] });
 
   function sectionHeader(title){
-    content.push({ text:title, bold:true, fontSize: Math.round(fontSizePt*1.05), margin:[0,8,0,2] });
-    content.push({ canvas:[{ type:'line', x1:0, y1:0, x2:515, y2:0, lineWidth:1 }], margin:[0,0,0,6] });
+    content.push({ text:title, bold:true, fontSize: Math.round(fontSizePt*1.05), margin:[0,5,0,1] });
+    content.push({ canvas:[{ type:'line', x1:0, y1:0, x2:515, y2:0, lineWidth:1 }], margin:[0,0,0,3] });
   }
 
   sectionHeader('SUMMARY');
-  content.push({ text: state.summary || '—', margin:[0,0,0,4] });
+  content.push({ text: state.summary || '—', margin:[0,0,0,2] });
 
   sectionHeader('EDUCATION');
   const edu=state.education;
   content.push({ columns:[
     { text:`${edu.school||''}${edu.degree?': '+edu.degree:''}${edu.gpa?' (GPA: '+edu.gpa+')':''}` },
     { text: edu.dates||'', alignment:'right' }
-  ], margin:[0,0,0,4] });
+  ], margin:[0,0,0,2] });
 
   sectionHeader('SKILLS');
   const visSkills = state.skills.filter(c=>c.skills.length);
   if(visSkills.length){
     visSkills.forEach(c=>{
-      content.push({ text:[ { text:c.category+': ', bold:true }, { text:c.skills.map(s=>s.name).join(', ') } ], margin:[0,0,0,3] });
+      content.push({ text:[ { text:c.category+': ', bold:true }, { text:c.skills.map(s=>s.name).join(', ') } ], margin:[0,0,0,1] });
     });
-  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+  } else { content.push({ text:'—', margin:[0,0,0,2] }); }
 
   sectionHeader('EXPERIENCE');
   if(state.experience.length){
     state.experience.forEach(e=>{
       const dates = e.startYear ? (e.current ? dateStr(e.startMonth,e.startYear)+' — Present' : dateStr(e.startMonth,e.startYear)+' — '+dateStr(e.endMonth,e.endYear)) : (e.dateRaw||'');
       const loc = e.city || (e.remote?'Remote':e.country) || '';
-      content.push({ columns:[ { text:e.company||'', bold:true }, { text:dates, alignment:'right' } ], margin:[0,4,0,0] });
-      content.push({ columns:[ { text:e.jobTitle||'', italics:true }, { text:loc, italics:true, alignment:'right' } ], margin:[0,0,0,2] });
-      if(e.roleDescription) content.push({ text:e.roleDescription, margin:[0,0,0,2] });
+      content.push({ columns:[ { text:e.company||'', bold:true }, { text:dates, alignment:'right' } ], margin:[0,3,0,0] });
+      content.push({ columns:[ { text:e.jobTitle||'', italics:true }, { text:loc, italics:true, alignment:'right' } ], margin:[0,0,0,1] });
+      if(e.roleDescription) content.push({ text:e.roleDescription, margin:[0,0,0,1] });
       const bl = e.bullets.filter(b=>b.text);
-      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,4] });
+      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,2] });
     });
-  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+  } else { content.push({ text:'—', margin:[0,0,0,2] }); }
 
   sectionHeader('PROJECTS');
   if(state.projects.length){
@@ -1129,11 +1129,11 @@ function buildPdfDocDefinition(){
       const nameRun=[{ text:(p.name||'')+' ', bold:true }];
       const href = normalizeUrl(p.link);
       if(href) nameRun.push({ text:'Link', link:href, color:accent, decoration:'underline' });
-      content.push({ columns:[ { text:nameRun }, { text:dates, alignment:'right' } ], margin:[0,4,0,0] });
+      content.push({ columns:[ { text:nameRun }, { text:dates, alignment:'right' } ], margin:[0,3,0,0] });
       const bl = p.bullets.filter(b=>b.text);
-      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,4] });
+      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,2] });
     });
-  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+  } else { content.push({ text:'—', margin:[0,0,0,2] }); }
 
   sectionHeader('CERTIFICATIONS');
   const visCerts = state.certifications.filter(c=>!c.hidden && (c.name||c.authority));
@@ -1143,9 +1143,9 @@ function buildPdfDocDefinition(){
       const href = normalizeUrl(c.url);
       const run = [ href ? { text:c.name||'', link:href, color:accent, decoration:'underline' } : { text:c.name||'' } ];
       if(c.authority) run.push({ text:' by '+c.authority });
-      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,0,0,3] });
+      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,0,0,1] });
     });
-  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+  } else { content.push({ text:'—', margin:[0,0,0,2] }); }
 
   sectionHeader('PUBLICATIONS');
   const visPubs = state.publications.filter(p=>!p.hidden && (p.awardName||p.description));
@@ -1158,8 +1158,8 @@ function buildPdfDocDefinition(){
         run.push({ text:' — ', bold:true });
         run.push(href ? { text:p.issuer, link:href, color:accent, decoration:'underline', bold:true } : { text:p.issuer, bold:true });
       }
-      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,4,0,0] });
-      if(p.description) content.push({ text:p.description, margin:[0,0,0,4] });
+      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,3,0,0] });
+      if(p.description) content.push({ text:p.description, margin:[0,0,0,2] });
     });
   } else { content.push({ text:'—' }); }
 
