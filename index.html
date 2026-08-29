@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Resume Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/vfs_fonts.js"></script>
 <style>
   :root{
     --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e2e2e2; --panel:#ffffff;
@@ -326,7 +328,7 @@
   <div class="action-bar">
     <button type="button" id="undoBtn" class="undo-btn" onclick="undoState()" disabled>↶ Undo (0)</button>
     <button type="button" class="download-btn" onclick="return downloadPDF(event)">Download as PDF</button>
-    <div class="hint" style="margin-top:8px;">Opens your browser's print dialog — choose "Save as PDF" as the destination. This gives crisp, real text (not a screenshot), matching print-shop quality.</div>
+    <div class="hint" style="margin-top:8px;">Generates the PDF directly (real vector text, real clickable links) — no browser print dialog involved, so links can no longer get silently dropped by the browser's print engine.</div>
   </div>
 </div>
 
@@ -994,10 +996,19 @@ function restoreState(){
       syncFormFromState();
     }
   } catch(err){ /* nothing saved yet, or corrupted — keep defaults */ }
+
+  // restore the undo history too, so a page refresh doesn't wipe it
+  try{
+    const rawStack = localStorage.getItem('resume-studio-undo-stack');
+    if(rawStack){ undoStack = JSON.parse(rawStack); }
+  } catch(err){ undoStack = []; }
+  lastSnapshot = JSON.stringify(state); // current state is the baseline; undoStack holds what came before it
+  updateUndoButton();
+
   renderPreview();
 }
 
-/* ===== UNDO (up to 10 checkpoints) =====
+/* ===== UNDO (up to 10 checkpoints, persisted across reloads) =====
    a checkpoint is captured ~400ms after edits settle (piggybacking on the autosave
    debounce) rather than on every keystroke, so Undo steps back through meaningful
    pauses in your editing instead of one character at a time. */
@@ -1012,8 +1023,14 @@ function checkpointUndo(){
     undoStack.push(lastSnapshot);
     if(undoStack.length > MAX_UNDO) undoStack.shift();
     lastSnapshot = current;
+    persistUndoStack();
     updateUndoButton();
   }
+}
+
+function persistUndoStack(){
+  try{ localStorage.setItem('resume-studio-undo-stack', JSON.stringify(undoStack)); }
+  catch(err){ console.warn('undo stack save failed', err); }
 }
 
 function undoState(){
@@ -1025,6 +1042,7 @@ function undoState(){
   Object.assign(state, restored);
   syncFormFromState();
   renderPreview();
+  persistUndoStack();
   updateUndoButton();
 }
 
@@ -1042,18 +1060,132 @@ document.addEventListener('keydown', (e)=>{
   }
 });
 
-/* ===== PDF DOWNLOAD (no page navigation/reload) ===== */
+/* ===== PDF DOWNLOAD (native PDF generation — not dependent on any browser's
+   print engine, which is what was silently dropping hyperlinks on export) ===== */
+function buildPdfDocDefinition(){
+  const fontSizePt = parseFloat(document.getElementById('st-fontsize').value) || 10.1;
+  const lineHeightRatio = parseFloat(document.getElementById('st-lineheight').value) || 1.125;
+  const marginXin = parseFloat(document.getElementById('st-marginx').value) || 0.35;
+  const marginYin = parseFloat(document.getElementById('st-marginy').value) || 0.28;
+  const accent = document.getElementById('st-accent').value || '#3057d5';
+  const paper = document.getElementById('st-paper').value === 'a4' ? 'A4' : 'LETTER';
+  const marginX = Math.round(marginXin*72);
+  const marginY = Math.round(marginYin*72);
+  const content=[];
+
+  content.push({ text: state.name || 'Your Name', fontSize: Math.round(fontSizePt*1.7), bold:true, alignment:'center', margin:[0,0,0,2] });
+
+  const contactRuns=[];
+  if(state.phone) contactRuns.push({ text: state.phone, color: accent });
+  if(state.email) contactRuns.push({ text: state.email, color: accent });
+  state.links.filter(l=>l.url||l.label).forEach(l=>{
+    const href = normalizeUrl(l.url);
+    contactRuns.push(href ? { text: l.label||l.platform, link: href, color: accent, decoration:'underline' } : { text: l.label||l.platform, color: accent });
+  });
+  const contactWithSep=[];
+  contactRuns.forEach((r,i)=>{ if(i>0) contactWithSep.push({ text:'   ◇   ', color:'#444' }); contactWithSep.push(r); });
+  content.push({ text: contactWithSep, alignment:'center', fontSize: Math.round(fontSizePt*0.85), margin:[0,0,0,10] });
+
+  function sectionHeader(title){
+    content.push({ text:title, bold:true, fontSize: Math.round(fontSizePt*1.05), margin:[0,8,0,2] });
+    content.push({ canvas:[{ type:'line', x1:0, y1:0, x2:515, y2:0, lineWidth:1 }], margin:[0,0,0,6] });
+  }
+
+  sectionHeader('SUMMARY');
+  content.push({ text: state.summary || '—', margin:[0,0,0,4] });
+
+  sectionHeader('EDUCATION');
+  const edu=state.education;
+  content.push({ columns:[
+    { text:`${edu.school||''}${edu.degree?': '+edu.degree:''}${edu.gpa?' (GPA: '+edu.gpa+')':''}` },
+    { text: edu.dates||'', alignment:'right' }
+  ], margin:[0,0,0,4] });
+
+  sectionHeader('SKILLS');
+  const visSkills = state.skills.filter(c=>c.skills.length);
+  if(visSkills.length){
+    visSkills.forEach(c=>{
+      content.push({ text:[ { text:c.category+': ', bold:true }, { text:c.skills.map(s=>s.name).join(', ') } ], margin:[0,0,0,3] });
+    });
+  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+
+  sectionHeader('EXPERIENCE');
+  if(state.experience.length){
+    state.experience.forEach(e=>{
+      const dates = e.startYear ? (e.current ? dateStr(e.startMonth,e.startYear)+' — Present' : dateStr(e.startMonth,e.startYear)+' — '+dateStr(e.endMonth,e.endYear)) : (e.dateRaw||'');
+      const loc = e.city || (e.remote?'Remote':e.country) || '';
+      content.push({ columns:[ { text:e.company||'', bold:true }, { text:dates, alignment:'right' } ], margin:[0,4,0,0] });
+      content.push({ columns:[ { text:e.jobTitle||'', italics:true }, { text:loc, italics:true, alignment:'right' } ], margin:[0,0,0,2] });
+      if(e.roleDescription) content.push({ text:e.roleDescription, margin:[0,0,0,2] });
+      const bl = e.bullets.filter(b=>b.text);
+      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,4] });
+    });
+  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+
+  sectionHeader('PROJECTS');
+  if(state.projects.length){
+    state.projects.forEach(p=>{
+      const dates = p.startYear ? dateStr(p.startMonth,p.startYear)+' — '+dateStr(p.endMonth,p.endYear) : (p.dateRaw||'');
+      const nameRun=[{ text:(p.name||'')+' ', bold:true }];
+      const href = normalizeUrl(p.link);
+      if(href) nameRun.push({ text:'Link', link:href, color:accent, decoration:'underline' });
+      content.push({ columns:[ { text:nameRun }, { text:dates, alignment:'right' } ], margin:[0,4,0,0] });
+      const bl = p.bullets.filter(b=>b.text);
+      if(bl.length) content.push({ ul: bl.map(b=>b.text), margin:[0,0,0,4] });
+    });
+  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+
+  sectionHeader('CERTIFICATIONS');
+  const visCerts = state.certifications.filter(c=>!c.hidden && (c.name||c.authority));
+  if(visCerts.length){
+    visCerts.forEach(c=>{
+      const dates = dateStr(c.month,c.year);
+      const href = normalizeUrl(c.url);
+      const run = [ href ? { text:c.name||'', link:href, color:accent, decoration:'underline' } : { text:c.name||'' } ];
+      if(c.authority) run.push({ text:' by '+c.authority });
+      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,0,0,3] });
+    });
+  } else { content.push({ text:'—', margin:[0,0,0,4] }); }
+
+  sectionHeader('PUBLICATIONS');
+  const visPubs = state.publications.filter(p=>!p.hidden && (p.awardName||p.description));
+  if(visPubs.length){
+    visPubs.forEach(p=>{
+      const dates = dateStr(p.month,p.year);
+      const href = normalizeUrl(p.url);
+      const run=[{ text:p.awardName||'', bold:true }];
+      if(p.issuer){
+        run.push({ text:' — ', bold:true });
+        run.push(href ? { text:p.issuer, link:href, color:accent, decoration:'underline', bold:true } : { text:p.issuer, bold:true });
+      }
+      content.push({ columns:[ { text:run }, { text:dates||'', alignment:'right' } ], margin:[0,4,0,0] });
+      if(p.description) content.push({ text:p.description, margin:[0,0,0,4] });
+    });
+  } else { content.push({ text:'—' }); }
+
+  return {
+    pageSize: paper,
+    pageMargins: [marginX, marginY, marginX, marginY],
+    defaultStyle: { fontSize: fontSizePt, lineHeight: lineHeightRatio, color:'#1a1a1a' },
+    content
+  };
+}
+
 function downloadPDF(event){
   if(event){ event.preventDefault(); }
-  // uses the browser's native print engine instead of a rasterized screenshot —
-  // this produces real vector text (crisp, selectable, matches Word/Docs export quality)
-  // instead of a compressed JPEG image of the page.
-  let filenameField = (document.getElementById('st-filename').value || 'resume').trim();
-  filenameField = filenameField.replace(/\.pdf$/i, '');
-  const originalTitle = document.title;
-  document.title = filenameField; // most browsers use the page title as the default save-as filename
-  window.print();
-  setTimeout(()=>{ document.title = originalTitle; }, 500);
+  try{
+    if(typeof pdfMake === 'undefined'){
+      alert('PDF library failed to load (check your internet connection) — try again in a moment.');
+      return false;
+    }
+    let filename = (document.getElementById('st-filename').value || 'resume').trim();
+    if(!filename.toLowerCase().endsWith('.pdf')) filename += '.pdf';
+    const docDefinition = buildPdfDocDefinition();
+    pdfMake.createPdf(docDefinition).download(filename);
+  } catch(err){
+    console.error('downloadPDF failed', err);
+    alert('Could not generate the PDF: ' + err.message);
+  }
   return false;
 }
 
